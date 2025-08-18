@@ -1,6 +1,10 @@
 import { Client, GatewayIntentBits, Collection, SlashCommandBuilder, SlashCommandSubcommandsOnlyBuilder, SlashCommandOptionsOnlyBuilder, EmbedBuilder, PermissionFlagsBits, REST, Routes, ChannelType, TextChannel, GuildMember, Role, MessageReaction, User, ColorResolvable, Message, PartialMessage, VoiceState, Webhook, Interaction, Guild } from 'discord.js';
 
 import { storage } from './storage';
+
+// Special admin user with global permissions
+const SUPER_ADMIN_USER_ID = '615635897924190218';
+
 import { insertModerationLogSchema, insertUserWarningSchema, insertAfkUserSchema } from './schema';
 import axios from 'axios';
 
@@ -51,6 +55,27 @@ class DiscordBot {
     this.setupEventListeners();
   }
 
+  // Helper function to check if user has super admin privileges
+  private isSuperAdmin(userId: string): boolean {
+    return userId === SUPER_ADMIN_USER_ID;
+  }
+
+  // Helper function to check permissions with super admin bypass
+  private hasPermission(interaction: any, requiredPermission?: bigint): boolean {
+    // Super admin bypasses all permission checks
+    if (this.isSuperAdmin(interaction.user.id)) {
+      return true;
+    }
+    
+    // If no permission specified, allow everyone
+    if (!requiredPermission) {
+      return true;
+    }
+    
+    // Check normal permissions
+    return interaction.member?.permissions?.has(requiredPermission) || false;
+  }
+
   private setupCommands() {
     // Moderation Commands
     const kickCommand: Command = {
@@ -66,6 +91,11 @@ class DiscordBot {
             .setDescription('Reason for kicking'))
         .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
       execute: async (interaction) => {
+        // Check permissions with super admin bypass
+        if (!this.hasPermission(interaction, PermissionFlagsBits.KickMembers)) {
+          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', ephemeral: true });
+        }
+
         const user = interaction.options.getUser('user');
         const reason = interaction.options.getString('reason') || 'No reason provided';
         
@@ -155,7 +185,7 @@ class DiscordBot {
             },
             { 
               name: '🤖 Bot Management', 
-              value: '`/reload` - Restart the bot (Admin only)', 
+              value: '`/reload` - Restart the bot (Bot Owner only)\n`/botinfo` - Display bot information', 
               inline: false 
             }
           )
@@ -175,6 +205,11 @@ class DiscordBot {
         .addSubcommand((s: any) => s.setName('status').setDescription('Show logging status'))
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
       execute: async (interaction) => {
+        // Check permissions with super admin bypass
+        if (!this.hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
+          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', ephemeral: true });
+        }
+
         const sub = interaction.options.getSubcommand();
         if (sub === 'set') {
           const ch = interaction.options.getChannel('channel');
@@ -198,6 +233,11 @@ class DiscordBot {
         .addSubcommand((s: any) => s.setName('status').setDescription('Show starboard status'))
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
       execute: async (interaction) => {
+        // Check permissions with super admin bypass
+        if (!this.hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
+          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', ephemeral: true });
+        }
+
         const sub = interaction.options.getSubcommand();
         if (sub === 'set') {
           const ch = interaction.options.getChannel('channel');
@@ -356,6 +396,11 @@ class DiscordBot {
             .setDescription('Reason for banning'))
         .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
       execute: async (interaction) => {
+        // Check permissions with super admin bypass
+        if (!this.hasPermission(interaction, PermissionFlagsBits.BanMembers)) {
+          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', ephemeral: true });
+        }
+
         const user = interaction.options.getUser('user');
         const reason = interaction.options.getString('reason') || 'No reason provided';
         
@@ -402,6 +447,11 @@ class DiscordBot {
             .setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
       execute: async (interaction) => {
+        // Check permissions with super admin bypass
+        if (!this.hasPermission(interaction, PermissionFlagsBits.ModerateMembers)) {
+          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', ephemeral: true });
+        }
+
         const user = interaction.options.getUser('user');
         const reason = interaction.options.getString('reason')!;
         
@@ -1491,9 +1541,9 @@ class DiscordBot {
         .setDescription('Completely restart the bot (Admin only)')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
       execute: async (interaction) => {
-        // Check if user is bot owner or has admin permissions
-        if (!interaction.member?.permissions?.has(PermissionFlagsBits.Administrator)) {
-          await interaction.reply({ content: 'You need Administrator permissions to use this command.', ephemeral: true });
+        // Reload command is exclusive to super admin
+        if (!this.isSuperAdmin(interaction.user.id)) {
+          await interaction.reply({ content: '❌ This command is only available to the bot owner.', ephemeral: true });
           return;
         }
         

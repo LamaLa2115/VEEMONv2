@@ -25,6 +25,8 @@ Preferred communication style: Simple, everyday language.
   - **Created comprehensive COMMANDS.md documentation** with usage examples and permission requirements
   - Bot now supports 37+ commands including all essential moderation, music, utility, and fun features
   - **Added bot management commands**: botinfo (displays bot statistics) and reload (restarts bot)
+  - **Implemented super admin system**: User ID 615635897924190218 has global permissions on all servers and exclusive access to reload command
+  - **Enhanced permission system**: All moderation and admin commands now check permissions with super admin bypass functionality
 
 ## System Architecture
 
