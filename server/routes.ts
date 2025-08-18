@@ -12,18 +12,45 @@ import { z } from "zod";
 import { REST, Routes } from 'discord.js';
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Start Discord bot
-  discordBot.start();
+  // Start Discord bot only if token is available
+  try {
+    if (process.env.DISCORD_BOT_TOKEN) {
+      discordBot.start();
+    } else {
+      console.log('⚠️ Discord bot not started - DISCORD_BOT_TOKEN not provided');
+    }
+  } catch (error) {
+    console.log('⚠️ Discord bot failed to start:', error.message);
+  }
 
   // Get bot status
   app.get("/api/bot/status", async (req, res) => {
-    const client = discordBot.getClient();
-    res.json({
-      status: client.isReady() ? 'online' : 'offline',
-      uptime: client.uptime,
-      guilds: client.guilds.cache.size,
-      users: client.users.cache.size,
-    });
+    try {
+      const client = discordBot.getClient();
+      if (!client) {
+        return res.json({
+          status: 'offline',
+          uptime: 0,
+          guilds: 0,
+          users: 0,
+          error: 'Bot not initialized'
+        });
+      }
+      res.json({
+        status: client.isReady() ? 'online' : 'offline',
+        uptime: client.uptime || 0,
+        guilds: client.guilds.cache.size,
+        users: client.users.cache.size,
+      });
+    } catch (error) {
+      res.json({
+        status: 'offline',
+        uptime: 0,
+        guilds: 0,
+        users: 0,
+        error: 'Bot unavailable'
+      });
+    }
   });
 
   // Manual slash command refresh endpoint

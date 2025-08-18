@@ -50,6 +50,7 @@ interface ConfigType {
   getApiEndpoints(service: 'lastfm' | 'external'): Record<string, string>;
   isFeatureEnabled(feature: string): boolean;
   getRateLimit(type: string): number;
+  getAutoModDefaults(): any;
 }
 
 export const config: ConfigType = {
@@ -195,16 +196,7 @@ export const config: ConfigType = {
     API_HEAVY: 2, // Commands that use external APIs
   },
 
-  // ============================================================================
-  // AUTO-MODERATION DEFAULTS
-  // ============================================================================
-  
-  AUTO_MOD_DEFAULTS: {
-    antiSpam: true,
-    antiLink: false,
-    antiInvite: true,
-    maxWarnings: 3,
-  },
+
   
   // ============================================================================
   // LOGGING CONFIGURATION
