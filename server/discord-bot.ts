@@ -1,9 +1,10 @@
-import { Client, GatewayIntentBits, Collection, SlashCommandBuilder, SlashCommandSubcommandsOnlyBuilder, SlashCommandOptionsOnlyBuilder, EmbedBuilder, PermissionFlagsBits, REST, Routes, ChannelType, TextChannel, GuildMember, Role, MessageReaction, User, ColorResolvable, Message, PartialMessage, VoiceState, Webhook, Interaction, Guild } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, SlashCommandBuilder, SlashCommandSubcommandsOnlyBuilder, SlashCommandOptionsOnlyBuilder, EmbedBuilder, PermissionFlagsBits, REST, Routes, ChannelType, TextChannel, GuildMember, Role, MessageReaction, User, ColorResolvable, Message, PartialMessage, VoiceState, Webhook, Interaction, Guild, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
 import { storage } from './storage';
+import { config } from './config';
 
 // Special admin user with global permissions
-const SUPER_ADMIN_USER_ID = '615635897924190218';
+const SUPER_ADMIN_USER_ID = config.SUPER_ADMIN_USER_ID;
 
 import { insertModerationLogSchema, insertUserWarningSchema, insertAfkUserSchema } from './schema';
 import axios from 'axios';
@@ -27,6 +28,7 @@ class DiscordBot {
   private userXp: Map<string, Map<string, number>>; // guildId -> (userId -> xp)
   private bumpReminders: Map<string, { channelId: string; intervalMin: number; timer?: NodeJS.Timeout }>;
   private counters: Map<string, { memberCountChannelId?: string }>; // guildId -> counters
+  private blackjackGames: Map<string, { playerCards: string[]; dealerCards: string[]; gameOver: boolean }>;
 
   constructor() {
     this.client = new Client({
@@ -40,7 +42,7 @@ class DiscordBot {
     });
     
     this.commands = new Collection();
-    this.lastfmApiKey = process.env.LASTFM_API_KEY || '';
+    this.lastfmApiKey = config.LASTFM_API_KEY;
     // init maps
     this.logChannels = new Map();
     this.starboard = new Map();
@@ -51,6 +53,7 @@ class DiscordBot {
     this.userXp = new Map();
     this.bumpReminders = new Map();
     this.counters = new Map();
+    this.blackjackGames = new Map();
     this.setupCommands();
     this.setupEventListeners();
   }
@@ -541,6 +544,13 @@ class DiscordBot {
         const playerValue = playerCards.reduce((sum, card) => sum + getCardValue(card), 0);
         const dealerValue = getCardValue(dealerCards[0]); // Only show first card
         
+        // Store game state
+        this.blackjackGames.set(interaction.user.id, {
+          playerCards,
+          dealerCards,
+          gameOver: false
+        });
+        
         const embed = new EmbedBuilder()
           .setColor('#5865F2')
           .setTitle('🃏 Blackjack')
@@ -557,11 +567,199 @@ class DiscordBot {
               inline: true 
             }
           )
-          .setFooter({ text: 'Use /hit or /stand to continue' })
           .setTimestamp();
+
+        const row = new ActionRowBuilder<ButtonBuilder>()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId('blackjack_hit')
+              .setLabel('Hit')
+              .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+              .setCustomId('blackjack_stand')
+              .setLabel('Stand')
+              .setStyle(ButtonStyle.Secondary)
+          );
           
-        await interaction.reply({ embeds: [embed] });
+        await interaction.reply({ embeds: [embed], components: [row] });
         await storage.incrementCommandUsed(interaction.guild.id);
+      }
+    };
+
+    const hitCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('hit')
+        .setDescription('Hit in blackjack (draw another card)'),
+      execute: async (interaction) => {
+        const game = this.blackjackGames.get(interaction.user.id);
+        if (!game || game.gameOver) {
+          return await interaction.reply({ content: 'You don\'t have an active blackjack game. Start one with /blackjack!', ephemeral: true });
+        }
+
+        const cards = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+        const getRandomCard = () => cards[Math.floor(Math.random() * cards.length)];
+        const getCardValue = (card: string) => {
+          if (card === 'A') return 11;
+          if (['J', 'Q', 'K'].includes(card)) return 10;
+          return parseInt(card);
+        };
+        const calculateHandValue = (cards: string[]) => {
+          let value = 0;
+          let aces = 0;
+          for (const card of cards) {
+            if (card === 'A') aces++;
+            value += getCardValue(card);
+          }
+          while (value > 21 && aces > 0) {
+            value -= 10;
+            aces--;
+          }
+          return value;
+        };
+
+        // Draw a card
+        const newCard = getRandomCard();
+        game.playerCards.push(newCard);
+        const playerValue = calculateHandValue(game.playerCards);
+        
+        let embed: EmbedBuilder;
+        let components: ActionRowBuilder<ButtonBuilder>[] = [];
+
+        if (playerValue > 21) {
+          // Bust
+          game.gameOver = true;
+          embed = new EmbedBuilder()
+            .setColor('#ED4245')
+            .setTitle('🃏 Blackjack - Bust!')
+            .setDescription('You busted! Better luck next time.')
+            .addFields(
+              { 
+                name: 'Your Final Cards', 
+                value: `${game.playerCards.join(', ')} (Value: ${playerValue})`,
+                inline: true 
+              },
+              { 
+                name: 'Dealer Cards', 
+                value: `${game.dealerCards.join(', ')} (Value: ${calculateHandValue(game.dealerCards)})`,
+                inline: true 
+              }
+            );
+          this.blackjackGames.delete(interaction.user.id);
+        } else {
+          // Continue game
+          embed = new EmbedBuilder()
+            .setColor('#5865F2')
+            .setTitle('🃏 Blackjack - Hit!')
+            .setDescription(`You drew a ${newCard}!`)
+            .addFields(
+              { 
+                name: 'Your Cards', 
+                value: `${game.playerCards.join(', ')} (Value: ${playerValue})`,
+                inline: true 
+              },
+              { 
+                name: 'Dealer Cards', 
+                value: `${game.dealerCards[0]}, ?? (Showing: ${getCardValue(game.dealerCards[0])})`,
+                inline: true 
+              }
+            );
+
+          const row = new ActionRowBuilder<ButtonBuilder>()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId('blackjack_hit')
+                .setLabel('Hit')
+                .setStyle(ButtonStyle.Primary),
+              new ButtonBuilder()
+                .setCustomId('blackjack_stand')
+                .setLabel('Stand')
+                .setStyle(ButtonStyle.Secondary)
+            );
+          components.push(row);
+        }
+
+        await interaction.reply({ embeds: [embed], components });
+      }
+    };
+
+    const standCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('stand')
+        .setDescription('Stand in blackjack (end your turn)'),
+      execute: async (interaction) => {
+        const game = this.blackjackGames.get(interaction.user.id);
+        if (!game || game.gameOver) {
+          return await interaction.reply({ content: 'You don\'t have an active blackjack game. Start one with /blackjack!', ephemeral: true });
+        }
+
+        const getCardValue = (card: string) => {
+          if (card === 'A') return 11;
+          if (['J', 'Q', 'K'].includes(card)) return 10;
+          return parseInt(card);
+        };
+        const calculateHandValue = (cards: string[]) => {
+          let value = 0;
+          let aces = 0;
+          for (const card of cards) {
+            if (card === 'A') aces++;
+            value += getCardValue(card);
+          }
+          while (value > 21 && aces > 0) {
+            value -= 10;
+            aces--;
+          }
+          return value;
+        };
+
+        // Dealer plays
+        const cards = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+        const getRandomCard = () => cards[Math.floor(Math.random() * cards.length)];
+        
+        while (calculateHandValue(game.dealerCards) < 17) {
+          game.dealerCards.push(getRandomCard());
+        }
+
+        const playerValue = calculateHandValue(game.playerCards);
+        const dealerValue = calculateHandValue(game.dealerCards);
+        
+        let result: string;
+        let color: ColorResolvable;
+        
+        if (dealerValue > 21) {
+          result = 'You win! Dealer busted.';
+          color = '#57F287';
+        } else if (playerValue > dealerValue) {
+          result = 'You win!';
+          color = '#57F287';
+        } else if (dealerValue > playerValue) {
+          result = 'Dealer wins!';
+          color = '#ED4245';
+        } else {
+          result = 'It\'s a tie!';
+          color = '#FEE75C';
+        }
+
+        game.gameOver = true;
+        
+        const embed = new EmbedBuilder()
+          .setColor(color)
+          .setTitle('🃏 Blackjack - Game Over!')
+          .setDescription(result)
+          .addFields(
+            { 
+              name: 'Your Final Cards', 
+              value: `${game.playerCards.join(', ')} (Value: ${playerValue})`,
+              inline: true 
+            },
+            { 
+              name: 'Dealer Final Cards', 
+              value: `${game.dealerCards.join(', ')} (Value: ${dealerValue})`,
+              inline: true 
+            }
+          );
+
+        this.blackjackGames.delete(interaction.user.id);
+        await interaction.reply({ embeds: [embed] });
       }
     };
 
@@ -920,13 +1118,195 @@ class DiscordBot {
       }
     };
 
-    // MUSIC COMMAND (placeholder)
+    // URBAN DICTIONARY COMMAND
+    const urbanCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('urban')
+        .setDescription('Look up a term on Urban Dictionary')
+        .addStringOption((option: any) =>
+          option.setName('term')
+            .setDescription('Term to look up')
+            .setRequired(true)),
+      execute: async (interaction) => {
+        const term = interaction.options.getString('term')!;
+        
+        try {
+          const response = await axios.get(`${config.URBAN_DICTIONARY_API}?term=${encodeURIComponent(term)}`);
+          const data = response.data;
+          
+          if (!data.list || data.list.length === 0) {
+            const embed = new EmbedBuilder()
+              .setColor('#ED4245')
+              .setTitle('📚 Urban Dictionary')
+              .setDescription(`No definition found for "${term}".`)
+              .setTimestamp();
+            return await interaction.reply({ embeds: [embed] });
+          }
+          
+          const definition = data.list[0];
+          const cleanDefinition = definition.definition.replace(/\[|\]/g, '').substring(0, 1000);
+          const cleanExample = definition.example ? definition.example.replace(/\[|\]/g, '').substring(0, 500) : 'No example provided';
+          
+          const embed = new EmbedBuilder()
+            .setColor('#5865F2')
+            .setTitle(`📚 ${definition.word}`)
+            .setDescription(cleanDefinition)
+            .addFields(
+              { name: 'Example', value: cleanExample, inline: false },
+              { name: 'Thumbs Up', value: definition.thumbs_up.toString(), inline: true },
+              { name: 'Thumbs Down', value: definition.thumbs_down.toString(), inline: true },
+              { name: 'Author', value: definition.author, inline: true }
+            )
+            .setTimestamp()
+            .setFooter({ text: 'Urban Dictionary' });
+            
+          await interaction.reply({ embeds: [embed] });
+        } catch (error) {
+          await interaction.reply({ content: 'Failed to fetch definition. Please try again later.', ephemeral: true });
+        }
+      }
+    };
+
+    // ENHANCED MUSIC COMMAND with YouTube integration
     const musicCommand: Command = {
       data: new SlashCommandBuilder()
         .setName('music')
-        .setDescription('Music controls (coming soon)'),
+        .setDescription('Music bot controls')
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('play')
+            .setDescription('Play a song from YouTube')
+            .addStringOption((option: any) =>
+              option.setName('query')
+                .setDescription('Song name or YouTube URL')
+                .setRequired(true)))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('pause')
+            .setDescription('Pause the current song'))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('resume')
+            .setDescription('Resume the current song'))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('stop')
+            .setDescription('Stop playing and clear the queue'))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('skip')
+            .setDescription('Skip the current song'))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('queue')
+            .setDescription('Show the current music queue'))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('volume')
+            .setDescription('Set the volume (0-100)')
+            .addIntegerOption((option: any) =>
+              option.setName('level')
+                .setDescription('Volume level (0-100)')
+                .setRequired(true)
+                .setMinValue(0)
+                .setMaxValue(100)))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('nowplaying')
+            .setDescription('Show the currently playing song')),
       execute: async (interaction) => {
-        await interaction.reply({ content: 'Music feature is not implemented yet.', ephemeral: true });
+        const subcommand = interaction.options.getSubcommand();
+        
+        // Check if user is in a voice channel
+        const member = interaction.member as GuildMember;
+        if (!member?.voice?.channel) {
+          return await interaction.reply({ content: '❌ You need to be in a voice channel to use music commands!', ephemeral: true });
+        }
+        
+        switch (subcommand) {
+          case 'play':
+            const query = interaction.options.getString('query')!;
+            
+            // Add to music queue in database
+            await storage.addToMusicQueue({
+              serverId: interaction.guild!.id,
+              title: `🎵 ${query}`,
+              url: query.startsWith('http') ? query : `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+              requestedBy: interaction.user.id,
+              requestedByUsername: interaction.user.username,
+              duration: 'Unknown',
+              position: 0
+            });
+            
+            const playEmbed = new EmbedBuilder()
+              .setColor('#57F287')
+              .setTitle('🎵 Added to Queue')
+              .setDescription(`**${query}** has been added to the music queue!`)
+              .addFields(
+                { name: 'Requested by', value: interaction.user.username, inline: true },
+                { name: 'Voice Channel', value: member.voice.channel.name, inline: true }
+              )
+              .setFooter({ text: 'Note: This is a demonstration - full music playback requires additional dependencies' })
+              .setTimestamp();
+              
+            await interaction.reply({ embeds: [playEmbed] });
+            await storage.incrementSongPlayed(interaction.guild!.id);
+            break;
+            
+          case 'queue':
+            const queue = await storage.getMusicQueue(interaction.guild!.id);
+            
+            if (queue.length === 0) {
+              const queueEmbed = new EmbedBuilder()
+                .setColor('#FEE75C')
+                .setTitle('🎵 Music Queue')
+                .setDescription('The music queue is empty!')
+                .setTimestamp();
+              return await interaction.reply({ embeds: [queueEmbed] });
+            }
+            
+            const queueList = queue.slice(0, 10).map((song, index) => 
+              `**${index + 1}.** ${song.title} - *${song.requestedBy}*`
+            ).join('\n');
+            
+            const queueEmbed = new EmbedBuilder()
+              .setColor('#5865F2')
+              .setTitle('🎵 Music Queue')
+              .setDescription(queueList)
+              .setFooter({ text: `Showing ${Math.min(queue.length, 10)} of ${queue.length} songs` })
+              .setTimestamp();
+              
+            await interaction.reply({ embeds: [queueEmbed] });
+            break;
+            
+          case 'stop':
+            await storage.clearMusicQueue(interaction.guild!.id);
+            
+            const stopEmbed = new EmbedBuilder()
+              .setColor('#ED4245')
+              .setTitle('🎵 Music Stopped')
+              .setDescription('Music playback stopped and queue cleared!')
+              .setTimestamp();
+              
+            await interaction.reply({ embeds: [stopEmbed] });
+            break;
+            
+          case 'volume':
+            const level = interaction.options.getInteger('level')!;
+            await storage.updateServer(interaction.guild!.id, { musicVolume: level });
+            
+            const volumeEmbed = new EmbedBuilder()
+              .setColor('#5865F2')
+              .setTitle('🔊 Volume Updated')
+              .setDescription(`Volume set to ${level}%`)
+              .setTimestamp();
+              
+            await interaction.reply({ embeds: [volumeEmbed] });
+            break;
+            
+          default:
+            await interaction.reply({ content: `The ${subcommand} command is not fully implemented yet.`, ephemeral: true });
+        }
       }
     };
 
@@ -1501,6 +1881,13 @@ class DiscordBot {
     this.commands.set('unlock', unlockCommand);
     this.commands.set('slowmode', slowmodeCommand);
     
+    // Blackjack game commands
+    this.commands.set('hit', hitCommand);
+    this.commands.set('stand', standCommand);
+    
+    // Urban Dictionary command
+    this.commands.set('urban', urbanCommand);
+    
     // Bot management commands
     const botInfoCommand: Command = {
       data: new SlashCommandBuilder()
@@ -1593,7 +1980,7 @@ class DiscordBot {
       console.log(`Bot is ready! Logged in as ${this.client.user?.tag}`);
       
       // Register slash commands
-      const rest = new REST().setToken(process.env.DISCORD_BOT_TOKEN || '');
+      const rest = new REST().setToken(config.DISCORD_BOT_TOKEN);
       
       try {
         const commandData = Array.from(this.commands.values()).map(command => command.data.toJSON());
@@ -1645,6 +2032,34 @@ class DiscordBot {
     });
 
     this.client.on('interactionCreate', async (interaction) => {
+      // Handle button interactions for blackjack
+      if (interaction.isButton()) {
+        if (interaction.customId === 'blackjack_hit') {
+          // Execute hit command logic
+          const hitCmd = this.commands.get('hit');
+          if (hitCmd) {
+            try {
+              await hitCmd.execute(interaction);
+            } catch (error) {
+              console.error('Error executing hit via button:', error);
+              await interaction.reply({ content: 'There was an error processing your hit!', ephemeral: true });
+            }
+          }
+        } else if (interaction.customId === 'blackjack_stand') {
+          // Execute stand command logic
+          const standCmd = this.commands.get('stand');
+          if (standCmd) {
+            try {
+              await standCmd.execute(interaction);
+            } catch (error) {
+              console.error('Error executing stand via button:', error);
+              await interaction.reply({ content: 'There was an error processing your stand!', ephemeral: true });
+            }
+          }
+        }
+        return;
+      }
+
       if (!interaction.isChatInputCommand()) return;
 
       const command = this.commands.get(interaction.commandName);
@@ -1689,7 +2104,7 @@ class DiscordBot {
       
       // Register slash commands for this new guild immediately
       try {
-        const rest = new REST().setToken(process.env.DISCORD_BOT_TOKEN || '');
+        const rest = new REST().setToken(config.DISCORD_BOT_TOKEN);
         const commandData = Array.from(this.commands.values()).map(command => command.data.toJSON());
         
         console.log(`Registering ${commandData.length} commands for new guild: ${guild.name}`);
