@@ -56,19 +56,19 @@ export function Sidebar() {
   });
 
   return (
-    <aside className="w-72 bg-discord-secondary border-r discord-border flex flex-col">
+    <aside className="w-72 discord-secondary border-r discord-border flex flex-col">
       {/* Bot Header */}
       <div className="p-6 border-b discord-border">
         <div className="flex items-center space-x-3">
           {/* Bot Avatar */}
-          <div className="w-12 h-12 bg-discord-blurple rounded-full flex items-center justify-center text-lg font-bold">
+          <div className="w-12 h-12 discord-blurple rounded-full flex items-center justify-center text-lg font-bold text-white">
             B
           </div>
           <div>
-            <h1 className="text-lg font-semibold discord-text-white">BotControl Pro</h1>
+            <h1 className="text-lg font-semibold discord-text-white">Discord Bot Dashboard</h1>
             <div className="flex items-center space-x-2">
               <div className={`w-2 h-2 rounded-full ${
-                botStatus?.status === 'online' ? 'bg-discord-green' : 'bg-discord-red'
+                botStatus?.status === 'online' ? 'discord-green' : 'discord-red'
               }`}></div>
               <span className="text-sm discord-text-muted">
                 {botStatus?.status === 'online' ? 'Online' : 'Offline'}

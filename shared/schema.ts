@@ -10,3 +10,13 @@ export interface BotStats {
   activeMembers: number;
   lastUpdated: string | null; // ISO timestamp string or null
 }
+
+// Export all types from server schema for frontend use
+export type { 
+  DiscordServer, 
+  CustomCommand, 
+  ModerationLog, 
+  UserWarning, 
+  AfkUser, 
+  MusicQueueItem 
+} from "../server/schema";

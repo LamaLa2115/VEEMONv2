@@ -1,106 +1,117 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Shield, Trash2, Dice1, FileText, Zap } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
-import { toast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { 
+  Settings, 
+  Shield, 
+  Volume2, 
+  MessageSquare, 
+  Users, 
+  Zap 
+} from "lucide-react";
+import { useState } from "react";
 
 interface QuickActionsProps {
   serverId: string;
 }
 
 export function QuickActions({ serverId }: QuickActionsProps) {
-  const queryClient = useQueryClient();
+  const [announcement, setAnnouncement] = useState("");
 
-  const clearQueueMutation = useMutation({
-    mutationFn: () => apiRequest('DELETE', `/api/servers/${serverId}/music/queue`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/servers', serverId, 'music/queue'] });
-      toast({
-        title: "Queue Cleared",
-        description: "Music queue has been cleared successfully.",
-      });
+  const quickActions = [
+    {
+      title: "Server Settings",
+      icon: Settings,
+      action: () => console.log("Open server settings"),
+      color: "bg-discord-blurple hover:bg-blue-600"
     },
-  });
+    {
+      title: "Moderation",
+      icon: Shield,
+      action: () => console.log("Open moderation panel"),
+      color: "bg-red-600 hover:bg-red-700"
+    },
+    {
+      title: "Music Controls",
+      icon: Volume2,
+      action: () => console.log("Open music controls"),
+      color: "bg-green-600 hover:bg-green-700"
+    },
+    {
+      title: "Member Management",
+      icon: Users,
+      action: () => console.log("Open member management"),
+      color: "bg-purple-600 hover:bg-purple-700"
+    }
+  ];
 
-  const handleEnableAutoMod = () => {
-    apiRequest('PATCH', `/api/servers/${serverId}`, { autoModEnabled: true })
-      .then(() => {
-        toast({
-          title: "Auto-Mod Enabled",
-          description: "Auto-moderation has been enabled for this server.",
-        });
-      })
-      .catch(() => {
-        toast({
-          title: "Failed to enable Auto-Mod",
-          description: "Please try again.",
-          variant: "destructive",
-        });
-      });
-  };
-
-  const handleClearQueue = () => {
-    clearQueueMutation.mutate();
-  };
-
-  const handleStartCoinFlip = () => {
-    // This would start a coin flip game in Discord
-    toast({
-      title: "Coin Flip Started",
-      description: "A coin flip game has been started in the Discord channel.",
-    });
-  };
-
-  const handleViewLogs = () => {
-    // This would navigate to logs view
-    toast({
-      title: "Logs",
-      description: "Viewing full audit logs...",
-    });
+  const handleAnnouncement = () => {
+    if (announcement.trim()) {
+      console.log("Sending announcement:", announcement);
+      setAnnouncement("");
+    }
   };
 
   return (
     <Card className="bg-discord-secondary border discord-border">
       <CardHeader className="border-b discord-border">
         <CardTitle className="text-lg font-semibold discord-text-white flex items-center">
-          <Zap className="mr-3" />
+          <Zap className="mr-3 h-5 w-5" />
           Quick Actions
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-6 space-y-3">
-        <Button 
-          onClick={handleEnableAutoMod}
-          className="w-full bg-discord-green hover:bg-green-500 text-discord-dark font-medium py-3"
-        >
-          <Shield className="mr-2 h-4 w-4" />
-          Enable Auto-Mod
-        </Button>
-        
-        <Button 
-          onClick={handleClearQueue}
-          disabled={clearQueueMutation.isPending}
-          className="w-full bg-discord-blurple hover:bg-blue-500 text-discord-white font-medium py-3"
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          {clearQueueMutation.isPending ? 'Clearing...' : 'Clear Music Queue'}
-        </Button>
-        
-        <Button 
-          onClick={handleStartCoinFlip}
-          className="w-full bg-discord-yellow hover:bg-yellow-400 text-discord-dark font-medium py-3"
-        >
-          <Dice1 className="mr-2 h-4 w-4" />
-          Start Coin Flip
-        </Button>
-        
-        <Button 
-          onClick={handleViewLogs}
-          className="w-full bg-discord-pink hover:bg-pink-400 text-discord-white font-medium py-3"
-        >
-          <FileText className="mr-2 h-4 w-4" />
-          View Full Logs
-        </Button>
+      <CardContent className="p-4 space-y-4">
+        {/* Quick Action Buttons */}
+        <div className="grid grid-cols-2 gap-3">
+          {quickActions.map((action, index) => (
+            <Button
+              key={index}
+              onClick={action.action}
+              className={`${action.color} text-white text-xs p-3 h-auto flex flex-col items-center space-y-1`}
+            >
+              <action.icon className="h-4 w-4" />
+              <span className="text-center leading-tight">{action.title}</span>
+            </Button>
+          ))}
+        </div>
+
+        {/* Quick Announcement */}
+        <div className="space-y-2">
+          <Label className="text-sm discord-text-white">Send Announcement</Label>
+          <div className="flex space-x-2">
+            <Input
+              type="text"
+              placeholder="Type announcement..."
+              value={announcement}
+              onChange={(e) => setAnnouncement(e.target.value)}
+              className="bg-discord-tertiary text-discord-white border discord-border text-sm"
+              onKeyPress={(e) => e.key === 'Enter' && handleAnnouncement()}
+            />
+            <Button
+              onClick={handleAnnouncement}
+              size="sm"
+              className="bg-discord-green hover:bg-green-500 text-discord-dark"
+            >
+              <MessageSquare className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* System Status */}
+        <div className="pt-2 border-t discord-border">
+          <div className="flex items-center justify-between text-xs">
+            <span className="discord-text-muted">System Status</span>
+            <span className="text-green-400 flex items-center">
+              <div className="w-2 h-2 bg-green-400 rounded-full mr-1"></div>
+              Online
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs mt-1">
+            <span className="discord-text-muted">Last Updated</span>
+            <span className="discord-text-muted">Just now</span>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

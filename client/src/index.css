@@ -57,6 +57,19 @@
   }
 }
 
+/* Discord Bot Dashboard utility classes */
+.discord-dark { background-color: hsl(220 8% 9%); }
+.discord-secondary { background-color: hsl(223 7% 11%); }
+.discord-tertiary { background-color: hsl(220 7% 15%); }
+.discord-blurple { background-color: hsl(235 86% 65%); }
+.discord-green { background-color: hsl(139 47% 50%); }
+.discord-red { background-color: hsl(359 82% 59%); }
+.discord-white { color: hsl(0 0% 100%); }
+
+.discord-text-white { color: hsl(0 0% 100%); }
+.discord-text-muted { color: hsl(220 5% 65%); }
+.discord-border { border-color: hsl(220 7% 15%); }
+
 /* Bleed Bot utility classes */
 .bleed-bg-primary { background-color: var(--bleed-bg-primary); }
 .bleed-bg-secondary { background-color: var(--bleed-bg-secondary); }
