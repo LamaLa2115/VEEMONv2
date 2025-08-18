@@ -31,7 +31,7 @@ class DiscordBot {
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessageReactions,
-        // GatewayIntentBits.MessageContent, // Enable this in Discord Developer Portal first
+        GatewayIntentBits.MessageContent, // Required for prefix commands
       ],
     });
     
@@ -1604,28 +1604,50 @@ class DiscordBot {
 
     // VoiceMaster: create temp VC when joining hub
     this.client.on('voiceStateUpdate', async (oldState: VoiceState, newState: VoiceState) => {
-      const gid = (newState.guild || oldState.guild).id;
+      const guild = newState.guild || oldState.guild;
+      if (!guild) return;
+      
+      const gid = guild.id;
       const conf = this.voiceMaster.get(gid);
       if (!conf) return;
+      
+      // User joined the hub channel
       if (!oldState.channelId && newState.channelId === conf.hubChannelId) {
         try {
-          const parent = conf.categoryId ? newState.guild.channels.cache.get(conf.categoryId) : undefined;
-          const chan = await newState.guild.channels.create({
-            name: `${newState.member?.user.username}'s room`,
+          const parent = conf.categoryId ? guild.channels.cache.get(conf.categoryId) : undefined;
+          const tempChannel = await guild.channels.create({
+            name: `${newState.member?.user.username || 'User'}'s room`,
             type: ChannelType.GuildVoice,
             parent: parent?.id,
             reason: 'VoiceMaster temporary channel',
           });
-          await newState.setChannel(chan.id);
-          // cleanup when empty
-          const interval = setInterval(async () => {
-            const c = newState.guild.channels.cache.get(chan.id);
-            if (!c || (c as any).members?.size === 0) {
-              clearInterval(interval);
-              try { await chan.delete('VoiceMaster cleanup'); } catch {}
+          
+          // Move user to the new temp channel
+          await newState.setChannel(tempChannel.id);
+          
+          // Set up cleanup interval
+          const cleanupInterval = setInterval(async () => {
+            try {
+              const channel = guild.channels.cache.get(tempChannel.id);
+              if (!channel) {
+                clearInterval(cleanupInterval);
+                return;
+              }
+              
+              // Check if channel is empty
+              const voiceChannel = channel as any;
+              if (voiceChannel.members && voiceChannel.members.size === 0) {
+                clearInterval(cleanupInterval);
+                await tempChannel.delete('VoiceMaster cleanup - channel empty');
+              }
+            } catch (error) {
+              clearInterval(cleanupInterval);
             }
-          }, 30000);
-        } catch {}
+          }, 30000); // Check every 30 seconds
+          
+        } catch (error) {
+          console.error('VoiceMaster error creating temp channel:', error);
+        }
       }
     });
   }
