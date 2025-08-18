@@ -20,6 +20,7 @@ class DiscordBot {
   private lastfmApiKey: string;
   // In-memory server configs
   private logChannels: Map<string, string>; // guildId -> channelId
+  private logAllMessages: Map<string, boolean>; // guildId -> enabled
   private starboard: Map<string, { channelId: string; threshold: number }>;
   private reactionRoles: Map<string, Array<{ messageId: string; emoji: string; roleId: string }>>; // guildId -> configs
   private joinGateMinDays: Map<string, number>; // guildId -> min account age days
@@ -45,6 +46,7 @@ class DiscordBot {
     this.lastfmApiKey = config.LASTFM_API_KEY;
     // init maps
     this.logChannels = new Map();
+    this.logAllMessages = new Map();
     this.starboard = new Map();
     this.reactionRoles = new Map();
     this.joinGateMinDays = new Map();
@@ -96,7 +98,7 @@ class DiscordBot {
       execute: async (interaction) => {
         // Check permissions with super admin bypass
         if (!this.hasPermission(interaction, PermissionFlagsBits.KickMembers)) {
-          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', ephemeral: true });
+          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', flags: 64 });
         }
 
         const user = interaction.options.getUser('user');
@@ -128,7 +130,7 @@ class DiscordBot {
             
           await interaction.reply({ embeds: [embed] });
         } catch (error) {
-          await interaction.reply({ content: 'Failed to kick user. Please check permissions.', ephemeral: true });
+          await interaction.reply({ content: 'Failed to kick user. Please check permissions.', flags: 64 });
         }
       }
     };
@@ -194,7 +196,7 @@ class DiscordBot {
           )
           .setFooter({ text: 'Use /command for detailed usage • GitHub: LamaLa2115/VEEMONv2' });
 
-        await interaction.reply({ embeds: [embed1, embed2], ephemeral: true });
+        await interaction.reply({ embeds: [embed1, embed2], flags: 64 });
       }
     };
 
@@ -206,21 +208,32 @@ class DiscordBot {
         .addSubcommand((s: any) => s.setName('set').setDescription('Set log channel')
           .addChannelOption((o: any) => o.setName('channel').setDescription('Log channel').addChannelTypes(ChannelType.GuildText).setRequired(true)))
         .addSubcommand((s: any) => s.setName('status').setDescription('Show logging status'))
+        .addSubcommand((s: any) => s.setName('messages')
+          .setDescription('Enable/disable message logging')
+          .addBooleanOption((o: any) => o.setName('enabled').setDescription('Enable message logging').setRequired(true)))
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
       execute: async (interaction) => {
         // Check permissions with super admin bypass
         if (!this.hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
-          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', ephemeral: true });
+          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', flags: 64 });
         }
 
         const sub = interaction.options.getSubcommand();
         if (sub === 'set') {
           const ch = interaction.options.getChannel('channel');
           this.logChannels.set(interaction.guild.id, ch!.id);
-          await interaction.reply({ content: `Logging channel set to <#${ch!.id}>`, ephemeral: true });
+          await interaction.reply({ content: `Logging channel set to <#${ch!.id}>`, flags: 64 });
+        } else if (sub === 'messages') {
+          const enabled = interaction.options.getBoolean('enabled')!;
+          this.logAllMessages.set(interaction.guild.id, enabled);
+          await interaction.reply({ content: `Message logging ${enabled ? 'enabled' : 'disabled'}`, flags: 64 });
         } else {
           const id = this.logChannels.get(interaction.guild.id);
-          await interaction.reply({ content: id ? `Logging to <#${id}>` : 'Logging disabled', ephemeral: true });
+          const msgLogging = this.logAllMessages.get(interaction.guild.id) || false;
+          await interaction.reply({ 
+            content: `**Logging Status:**\nChannel: ${id ? `<#${id}>` : 'Not set'}\nMessage Logging: ${msgLogging ? 'Enabled' : 'Disabled'}`, 
+            flags: 64 
+          });
         }
       }
     };
@@ -238,7 +251,7 @@ class DiscordBot {
       execute: async (interaction) => {
         // Check permissions with super admin bypass
         if (!this.hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
-          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', ephemeral: true });
+          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', flags: 64 });
         }
 
         const sub = interaction.options.getSubcommand();
@@ -246,10 +259,10 @@ class DiscordBot {
           const ch = interaction.options.getChannel('channel');
           const threshold = interaction.options.getInteger('threshold')!;
           this.starboard.set(interaction.guild.id, { channelId: ch!.id, threshold });
-          await interaction.reply({ content: `Starboard set to <#${ch!.id}> with threshold ${threshold} ⭐`, ephemeral: true });
+          await interaction.reply({ content: `Starboard set to <#${ch!.id}> with threshold ${threshold} ⭐`, flags: 64 });
         } else {
           const conf = this.starboard.get(interaction.guild.id);
-          await interaction.reply({ content: conf ? `Channel <#${conf.channelId}>, threshold ${conf.threshold}` : 'Starboard disabled', ephemeral: true });
+          await interaction.reply({ content: conf ? `Channel <#${conf.channelId}>, threshold ${conf.threshold}` : 'Starboard disabled', flags: 64 });
         }
       }
     };
@@ -275,11 +288,11 @@ class DiscordBot {
           const arr = this.reactionRoles.get(gid) ?? [];
           arr.push({ messageId, emoji, roleId: role.id });
           this.reactionRoles.set(gid, arr);
-          await interaction.reply({ content: `Reaction role added: ${emoji} -> <@&${role.id}> on message ${messageId}`, ephemeral: true });
+          await interaction.reply({ content: `Reaction role added: ${emoji} -> <@&${role.id}> on message ${messageId}`, flags: 64 });
         } else {
           const arr = this.reactionRoles.get(gid) ?? [];
           const text = arr.length ? arr.map(r => `${r.emoji} -> <@&${r.roleId}> (message ${r.messageId})`).join('\n') : 'No reaction roles configured.';
-          await interaction.reply({ content: text, ephemeral: true });
+          await interaction.reply({ content: text, flags: 64 });
         }
       }
     };
@@ -294,7 +307,7 @@ class DiscordBot {
       execute: async (interaction) => {
         const days = interaction.options.getInteger('min_days')!;
         this.joinGateMinDays.set(interaction.guild.id, days);
-        await interaction.reply({ content: `Join gate set: accounts must be at least ${days} day(s) old.`, ephemeral: true });
+        await interaction.reply({ content: `Join gate set: accounts must be at least ${days} day(s) old.`, flags: 64 });
       }
     };
 
@@ -310,7 +323,7 @@ class DiscordBot {
         const hub = interaction.options.getChannel('hub');
         const category = interaction.options.getChannel('category');
         this.voiceMaster.set(interaction.guild.id, { hubChannelId: hub!.id, categoryId: category?.id });
-        await interaction.reply({ content: `VoiceMaster configured. Hub: <#${hub!.id}>${category ? `, Category: <#${category.id}>` : ''}`, ephemeral: true });
+        await interaction.reply({ content: `VoiceMaster configured. Hub: <#${hub!.id}>${category ? `, Category: <#${category.id}>` : ''}`, flags: 64 });
       }
     };
 
@@ -331,17 +344,17 @@ class DiscordBot {
           const amt = interaction.options.getInteger('amount')!;
           conf.xpPerMsg = amt;
           this.levelConfig.set(gid, conf);
-          await interaction.reply({ content: `XP per message set to ${amt}.`, ephemeral: true });
+          await interaction.reply({ content: `XP per message set to ${amt}.`, flags: 64 });
         } else if (sub === 'reward') {
           const xp = interaction.options.getInteger('xp')!;
           const role = interaction.options.getRole('role') as Role;
           conf.rewards.push({ xp, roleId: role.id });
           conf.rewards.sort((a,b) => a.xp - b.xp);
           this.levelConfig.set(gid, conf);
-          await interaction.reply({ content: `Added reward: <@&${role.id}> at ${xp} XP.`, ephemeral: true });
+          await interaction.reply({ content: `Added reward: <@&${role.id}> at ${xp} XP.`, flags: 64 });
         } else {
           const rewards = conf.rewards.map(r => `${r.xp} XP -> <@&${r.roleId}>`).join('\n') || 'No rewards';
-          await interaction.reply({ content: `XP/msg: ${conf.xpPerMsg}\n${rewards}`, ephemeral: true });
+          await interaction.reply({ content: `XP/msg: ${conf.xpPerMsg}\n${rewards}`, flags: 64 });
         }
       }
     };
@@ -364,7 +377,7 @@ class DiscordBot {
           try { await ch.send('Friendly reminder to bump your server!'); } catch {}
         }, intervalMin * 60 * 1000);
         this.bumpReminders.set(gid, { channelId: ch.id, intervalMin, timer });
-        await interaction.reply({ content: `Bump reminders set in <#${ch.id}> every ${intervalMin} minutes.`, ephemeral: true });
+        await interaction.reply({ content: `Bump reminders set in <#${ch.id}> every ${intervalMin} minutes.`, flags: 64 });
       }
     };
 
@@ -382,7 +395,7 @@ class DiscordBot {
         c.memberCountChannelId = ch.id;
         this.counters.set(gid, c);
         await this.updateMemberCounter(interaction.guild.id);
-        await interaction.reply({ content: `Member counter bound to <#${ch.id}>.`, ephemeral: true });
+        await interaction.reply({ content: `Member counter bound to <#${ch.id}>.`, flags: 64 });
       }
     };
 
@@ -401,7 +414,7 @@ class DiscordBot {
       execute: async (interaction) => {
         // Check permissions with super admin bypass
         if (!this.hasPermission(interaction, PermissionFlagsBits.BanMembers)) {
-          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', ephemeral: true });
+          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', flags: 64 });
         }
 
         const user = interaction.options.getUser('user');
@@ -431,7 +444,7 @@ class DiscordBot {
             
           await interaction.reply({ embeds: [embed] });
         } catch (error) {
-          await interaction.reply({ content: 'Failed to ban user. Please check permissions.', ephemeral: true });
+          await interaction.reply({ content: 'Failed to ban user. Please check permissions.', flags: 64 });
         }
       }
     };
@@ -452,7 +465,7 @@ class DiscordBot {
       execute: async (interaction) => {
         // Check permissions with super admin bypass
         if (!this.hasPermission(interaction, PermissionFlagsBits.ModerateMembers)) {
-          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', ephemeral: true });
+          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', flags: 64 });
         }
 
         const user = interaction.options.getUser('user');
@@ -867,7 +880,7 @@ class DiscordBot {
           
           await interaction.reply({ embeds: [embed] });
         } catch (error) {
-          await interaction.reply({ content: 'Failed to perform search. Please try again later.', ephemeral: true });
+          await interaction.reply({ content: 'Failed to perform search. Please try again later.', flags: 64 });
         }
         
         await storage.incrementCommandUsed(interaction.guild.id);
@@ -891,12 +904,12 @@ class DiscordBot {
         }
         
         if (!username) {
-          await interaction.reply({ content: 'Please provide a Last.fm username or set one in server settings.', ephemeral: true });
+          await interaction.reply({ content: 'Please provide a Last.fm username or set one in server settings.', flags: 64 });
           return;
         }
         
         if (!this.lastfmApiKey) {
-          await interaction.reply({ content: 'Last.fm integration is not configured.', ephemeral: true });
+          await interaction.reply({ content: 'Last.fm integration is not configured.', flags: 64 });
           return;
         }
         
@@ -905,7 +918,7 @@ class DiscordBot {
           const track = response.data.recenttracks.track[0];
           
           if (!track) {
-            await interaction.reply({ content: 'No recent tracks found for this user.', ephemeral: true });
+            await interaction.reply({ content: 'No recent tracks found for this user.', flags: 64 });
             return;
           }
           
@@ -923,7 +936,7 @@ class DiscordBot {
           
           await interaction.reply({ embeds: [embed] });
         } catch (error) {
-          await interaction.reply({ content: 'Failed to fetch Last.fm data. Please check the username.', ephemeral: true });
+          await interaction.reply({ content: 'Failed to fetch Last.fm data. Please check the username.', flags: 64 });
         }
         
         await storage.incrementCommandUsed(interaction.guild.id);
@@ -1072,7 +1085,7 @@ class DiscordBot {
             reason: `${reason} (${duration} minutes)`,
           });
         } catch (error) {
-          await interaction.reply({ content: 'Failed to timeout user. Please check permissions.', ephemeral: true });
+          await interaction.reply({ content: 'Failed to timeout user. Please check permissions.', flags: 64 });
         }
       }
     };
@@ -1102,13 +1115,13 @@ class DiscordBot {
           if (targetUser) {
             const userMessages = messages.filter((msg: Message) => msg.author.id === targetUser.id);
             await interaction.channel.bulkDelete(userMessages);
-            await interaction.reply({ content: `Deleted ${userMessages.size} messages from ${targetUser.username}.`, ephemeral: true });
+            await interaction.reply({ content: `Deleted ${userMessages.size} messages from ${targetUser.username}.`, flags: 64 });
           } else {
             await interaction.channel.bulkDelete(messages);
-            await interaction.reply({ content: `Deleted ${messages.size} messages.`, ephemeral: true });
+            await interaction.reply({ content: `Deleted ${messages.size} messages.`, flags: 64 });
           }
         } catch (error) {
-          await interaction.reply({ content: 'Failed to delete messages. They may be too old.', ephemeral: true });
+          await interaction.reply({ content: 'Failed to delete messages. They may be too old.', flags: 64 });
         }
       }
     };
@@ -1120,7 +1133,7 @@ class DiscordBot {
         .setDescription('Role management (coming soon)')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
       execute: async (interaction) => {
-        await interaction.reply({ content: 'Role management is not implemented yet.', ephemeral: true });
+        await interaction.reply({ content: 'Role management is not implemented yet.', flags: 64 });
       }
     };
 
@@ -1168,7 +1181,7 @@ class DiscordBot {
             
           await interaction.reply({ embeds: [embed] });
         } catch (error) {
-          await interaction.reply({ content: 'Failed to fetch definition. Please try again later.', ephemeral: true });
+          await interaction.reply({ content: 'Failed to fetch definition. Please try again later.', flags: 64 });
         }
       }
     };
@@ -1337,7 +1350,7 @@ class DiscordBot {
         .setDescription('Giveaway management (coming soon)')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
       execute: async (interaction) => {
-        await interaction.reply({ content: 'Giveaway feature is not implemented yet.', ephemeral: true });
+        await interaction.reply({ content: 'Giveaway feature is not implemented yet.', flags: 64 });
       }
     };
 
@@ -1369,7 +1382,7 @@ class DiscordBot {
             const webhooks = await interaction.guild.fetchWebhooks();
             
             if (webhooks.size === 0) {
-              await interaction.reply({ content: 'No webhooks found in this server.', ephemeral: true });
+              await interaction.reply({ content: 'No webhooks found in this server.', flags: 64 });
               return;
             }
             
@@ -1383,9 +1396,9 @@ class DiscordBot {
               .setDescription(webhookList)
               .setTimestamp();
               
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+            await interaction.reply({ embeds: [embed], flags: 64 });
           } catch (error) {
-            await interaction.reply({ content: 'Failed to fetch webhooks.', ephemeral: true });
+            await interaction.reply({ content: 'Failed to fetch webhooks.', flags: 64 });
           }
         }
       }
@@ -1519,17 +1532,17 @@ class DiscordBot {
             const userMessages = messages.filter(msg => msg.author.id === targetUser.id).first(amount);
             
             if (userMessages.length === 0) {
-              await interaction.reply({ content: `No messages found from ${targetUser.tag}`, ephemeral: true });
+              await interaction.reply({ content: `No messages found from ${targetUser.tag}`, flags: 64 });
               return;
             }
             
             await channel.bulkDelete(userMessages);
-            await interaction.reply({ content: `🗑️ Deleted ${userMessages.length} messages from ${targetUser.tag}`, ephemeral: true });
+            await interaction.reply({ content: `🗑️ Deleted ${userMessages.length} messages from ${targetUser.tag}`, flags: 64 });
           } else {
             // Delete last X messages
             const messages = await channel.messages.fetch({ limit: amount });
             await channel.bulkDelete(messages);
-            await interaction.reply({ content: `🗑️ Deleted ${messages.size} messages`, ephemeral: true });
+            await interaction.reply({ content: `🗑️ Deleted ${messages.size} messages`, flags: 64 });
           }
           
           // Log the action
@@ -1545,7 +1558,7 @@ class DiscordBot {
           
           await storage.incrementModerationAction(interaction.guild.id);
         } catch (error) {
-          await interaction.reply({ content: '❌ Failed to delete messages. Make sure they are less than 14 days old.', ephemeral: true });
+          await interaction.reply({ content: '❌ Failed to delete messages. Make sure they are less than 14 days old.', flags: 64 });
         }
       }
     };
@@ -1580,7 +1593,7 @@ class DiscordBot {
             .setTimestamp();
           
           await channel.send({ embeds: [embed] });
-          await interaction.reply({ content: `🔒 Locked ${channel} successfully`, ephemeral: true });
+          await interaction.reply({ content: `🔒 Locked ${channel} successfully`, flags: 64 });
           
           // Log the action
           await storage.createModerationLog({
@@ -1595,7 +1608,7 @@ class DiscordBot {
           
           await storage.incrementModerationAction(interaction.guild.id);
         } catch (error) {
-          await interaction.reply({ content: '❌ Failed to lock the channel. Check bot permissions.', ephemeral: true });
+          await interaction.reply({ content: '❌ Failed to lock the channel. Check bot permissions.', flags: 64 });
         }
       }
     };
@@ -1630,7 +1643,7 @@ class DiscordBot {
             .setTimestamp();
           
           await channel.send({ embeds: [embed] });
-          await interaction.reply({ content: `🔓 Unlocked ${channel} successfully`, ephemeral: true });
+          await interaction.reply({ content: `🔓 Unlocked ${channel} successfully`, flags: 64 });
           
           // Log the action
           await storage.createModerationLog({
@@ -1645,7 +1658,7 @@ class DiscordBot {
           
           await storage.incrementModerationAction(interaction.guild.id);
         } catch (error) {
-          await interaction.reply({ content: '❌ Failed to unlock the channel. Check bot permissions.', ephemeral: true });
+          await interaction.reply({ content: '❌ Failed to unlock the channel. Check bot permissions.', flags: 64 });
         }
       }
     };
@@ -1691,7 +1704,7 @@ class DiscordBot {
           
           await storage.incrementModerationAction(interaction.guild.id);
         } catch (error) {
-          await interaction.reply({ content: '❌ Failed to set slowmode. Check bot permissions.', ephemeral: true });
+          await interaction.reply({ content: '❌ Failed to set slowmode. Check bot permissions.', flags: 64 });
         }
       }
     };
@@ -1950,11 +1963,11 @@ class DiscordBot {
       execute: async (interaction) => {
         // Reload command is exclusive to super admin
         if (!this.isSuperAdmin(interaction.user.id)) {
-          await interaction.reply({ content: '❌ This command is only available to the bot owner.', ephemeral: true });
+          await interaction.reply({ content: '❌ This command is only available to the bot owner.', flags: 64 });
           return;
         }
         
-        await interaction.reply({ content: '🔄 Restarting bot completely... Bot will be back online shortly.', ephemeral: true });
+        await interaction.reply({ content: '🔄 Restarting bot completely... Bot will be back online shortly.', flags: 64 });
         
         console.log(`Bot restart requested by ${interaction.user.username} (${interaction.user.id})`);
         console.log('Initiating complete bot restart...');
@@ -2159,7 +2172,13 @@ class DiscordBot {
     });
 
     this.client.on('messageCreate', async (message) => {
-      if (message.author.bot) return;
+      if (message.author.bot || !message.guild) return;
+      
+      // Log message creation (if enabled)
+      const logAllMessages = this.logAllMessages.get(message.guild.id) || false;
+      if (logAllMessages) {
+        await this.log(message.guild.id, `💬 <@${message.author.id}> in <#${message.channelId}>: ${message.content.substring(0, 100)}${message.content.length > 100 ? '...' : ''}`, '#36393F');
+      }
 
       // Level XP
       const gid = message.guild!.id;
@@ -2241,6 +2260,38 @@ class DiscordBot {
             }
           }
         }
+      }
+    });
+
+    // Voice state logging for joins/leaves/moves
+    this.client.on('voiceStateUpdate', async (oldState, newState) => {
+      if (newState.member?.user.bot) return;
+      
+      const guildId = newState.guild.id;
+      const userId = newState.member?.id;
+      const username = newState.member?.user.username;
+
+      // User joined a voice channel
+      if (!oldState.channelId && newState.channelId) {
+        await this.log(guildId, `🎤 <@${userId}> joined voice channel <#${newState.channelId}>`, '#57F287');
+      }
+      // User left a voice channel
+      else if (oldState.channelId && !newState.channelId) {
+        await this.log(guildId, `🎤 <@${userId}> left voice channel <#${oldState.channelId}>`, '#ED4245');
+      }
+      // User moved between voice channels
+      else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
+        await this.log(guildId, `🎤 <@${userId}> moved from <#${oldState.channelId}> to <#${newState.channelId}>`, '#FEE75C');
+      }
+      // User muted/unmuted
+      else if (oldState.selfMute !== newState.selfMute) {
+        const action = newState.selfMute ? 'muted' : 'unmuted';
+        await this.log(guildId, `🔇 <@${userId}> ${action} themselves in <#${newState.channelId}>`, '#5865F2');
+      }
+      // User deafened/undeafened
+      else if (oldState.selfDeaf !== newState.selfDeaf) {
+        const action = newState.selfDeaf ? 'deafened' : 'undeafened';
+        await this.log(guildId, `🔇 <@${userId}> ${action} themselves in <#${newState.channelId}>`, '#5865F2');
       }
     });
 
