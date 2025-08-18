@@ -1204,12 +1204,24 @@ class DiscordBot {
       try {
         const commandData = Array.from(this.commands.values()).map(command => command.data.toJSON());
         
+        console.log(`Registering ${commandData.length} slash commands:`, commandData.map(cmd => cmd.name).join(', '));
+        
+        // Clear existing commands first
+        await rest.put(
+          Routes.applicationCommands(this.client.user!.id),
+          { body: [] }
+        );
+        
+        // Wait a moment then re-register
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         await rest.put(
           Routes.applicationCommands(this.client.user!.id),
           { body: commandData }
         );
         
         console.log('Successfully registered slash commands.');
+        console.log('If new commands don\'t appear immediately, try: 1) Refresh Discord, 2) Leave and rejoin the server, 3) Wait up to 1 hour for global commands to sync');
       } catch (error) {
         console.error('Error registering slash commands:', error);
       }
@@ -1453,9 +1465,9 @@ class DiscordBot {
         },
         followUp: async (options: any) => {
           if (typeof options === 'string') {
-            return await message.channel.send(options);
+            return await (message.channel as any).send(options);
           }
-          return await message.channel.send(options);
+          return await (message.channel as any).send(options);
         },
         options: {
           getUser: (name: string) => {
