@@ -41,6 +41,7 @@ interface ConfigType {
   NODE_ENV: string;
   SESSION_SECRET: string;
   EXTERNAL_APIS: Record<string, string>;
+  URBAN_DICTIONARY_API: string;
   LASTFM_ENDPOINTS: Record<string, string>;
   FEATURES: Record<string, boolean>;
   RATE_LIMITS: Record<string, number>;
@@ -148,6 +149,9 @@ export const config: ConfigType = {
     WEATHER: 'https://api.openweathermap.org/data/2.5/weather',
     NEWS: 'https://newsapi.org/v2/top-headlines',
   },
+
+  // External API endpoints
+  URBAN_DICTIONARY_API: 'https://api.urbandictionary.com/v0/define',
   
   // Last.fm API endpoints
   LASTFM_ENDPOINTS: {
@@ -189,6 +193,17 @@ export const config: ConfigType = {
     MODERATION: 3, // Moderation commands
     GAMES: 3, // Game commands
     API_HEAVY: 2, // Commands that use external APIs
+  },
+
+  // ============================================================================
+  // AUTO-MODERATION DEFAULTS
+  // ============================================================================
+  
+  AUTO_MOD_DEFAULTS: {
+    antiSpam: true,
+    antiLink: false,
+    antiInvite: true,
+    maxWarnings: 3,
   },
   
   // ============================================================================
@@ -245,6 +260,13 @@ export const config: ConfigType = {
    */
   getRateLimit(type: keyof typeof config.RATE_LIMITS) {
     return this.RATE_LIMITS[type] || this.RATE_LIMITS.DEFAULT;
+  },
+
+  /**
+   * Gets auto-mod default settings
+   */
+  getAutoModDefaults() {
+    return this.AUTO_MOD_DEFAULTS;
   }
 };
 
