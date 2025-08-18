@@ -812,8 +812,10 @@ export class EnhancedDiscordBot {
           '📰 **News**: `/news` - Get latest news headlines',
           '👥 **Roles**: `/role` - Role management commands',
           '📚 **Urban Dictionary**: `/urban` - Look up definitions',
-          '🎰 **Games**: `/blackjack` - Play blackjack game',
-          '⚙️ **Utility**: `/ping`, `/serverinfo`, `/userinfo`, `/avatar`'
+          '🎰 **Games**: `/blackjack`, `/coinflip` - Casino and fun games',
+          '⚙️ **Utility**: `/ping`, `/serverinfo`, `/userinfo`, `/avatar`, `/help`',
+          '💤 **AFK**: `/afk` - Set away-from-keyboard status',
+          '🗑️ **Moderation**: `/clear`, `/timeout`, `/warn` - Additional mod tools'
         ].join('\n');
 
         const embed = new EmbedBuilder()
@@ -937,6 +939,212 @@ export class EnhancedDiscordBot {
       }
     };
 
+    // ============================================================================
+    // ADDITIONAL COMMANDS FROM OLD BOT
+    // ============================================================================
+
+    // AFK Command
+    const afkCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('afk')
+        .setDescription('Set yourself as AFK with an optional message')
+        .addStringOption(option =>
+          option.setName('reason')
+            .setDescription('AFK reason (optional)')),
+      execute: async (interaction) => {
+        const reason = interaction.options.getString('reason') || 'AFK';
+        
+        try {
+          await storage.createAfkUser({
+            userId: interaction.user.id,
+            username: interaction.user.username,
+            reason: reason,
+            serverId: interaction.guildId || 'DM'
+          });
+          
+          await interaction.reply({ 
+            content: `💤 ${interaction.user.username} is now AFK: ${reason}`,
+            ephemeral: true 
+          });
+        } catch (error) {
+          await interaction.reply({ 
+            content: '❌ Failed to set AFK status.',
+            ephemeral: true 
+          });
+        }
+      }
+    };
+
+    // Clear/Purge Command (alternative implementation)
+    const clearCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('clear')
+        .setDescription('Clear messages from the channel')
+        .addIntegerOption(option =>
+          option.setName('amount')
+            .setDescription('Number of messages to clear (1-100)')
+            .setRequired(true)
+            .setMinValue(1)
+            .setMaxValue(100))
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('Only clear messages from this user'))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+      execute: async (interaction) => {
+        if (!this.hasPermission(interaction, PermissionFlagsBits.ManageMessages)) {
+          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', ephemeral: true });
+        }
+
+        const amount = interaction.options.getInteger('amount');
+        const targetUser = interaction.options.getUser('user');
+        
+        try {
+          await interaction.deferReply({ ephemeral: true });
+          
+          const channel = interaction.channel as TextChannel;
+          const messages = await channel.messages.fetch({ limit: amount });
+          
+          let messagesToDelete = Array.from(messages.values());
+          
+          if (targetUser) {
+            messagesToDelete = messagesToDelete.filter(msg => msg.author.id === targetUser.id);
+          }
+          
+          await channel.bulkDelete(messagesToDelete);
+          
+          await interaction.editReply({ 
+            content: `🗑️ Cleared ${messagesToDelete.length} messages${targetUser ? ` from ${targetUser.tag}` : ''}.` 
+          });
+        } catch (error) {
+          await interaction.editReply({ content: `❌ Failed to clear messages: ${error.message}` });
+        }
+      }
+    };
+
+    // Timeout Command
+    const timeoutCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('timeout')
+        .setDescription('Timeout a user for a specified duration')
+        .addUserOption(option => 
+          option.setName('user')
+            .setDescription('The user to timeout')
+            .setRequired(true))
+        .addIntegerOption(option =>
+          option.setName('duration')
+            .setDescription('Timeout duration in minutes')
+            .setRequired(true)
+            .setMinValue(1)
+            .setMaxValue(10080))
+        .addStringOption(option =>
+          option.setName('reason')
+            .setDescription('Reason for timeout'))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+      execute: async (interaction) => {
+        if (!this.hasPermission(interaction, PermissionFlagsBits.ModerateMembers)) {
+          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', ephemeral: true });
+        }
+
+        const user = interaction.options.getUser('user');
+        const duration = interaction.options.getInteger('duration');
+        const reason = interaction.options.getString('reason') || 'No reason provided';
+        
+        try {
+          const member = await interaction.guild.members.fetch(user.id);
+          const timeoutUntil = new Date(Date.now() + duration * 60 * 1000);
+          
+          await member.timeout(duration * 60 * 1000, reason);
+          
+          const embed = new EmbedBuilder()
+            .setColor('#ED4245')
+            .setTitle('User Timed Out')
+            .setDescription(`${user.tag} has been timed out`)
+            .addFields(
+              { name: 'Duration', value: `${duration} minutes`, inline: true },
+              { name: 'Until', value: `<t:${Math.floor(timeoutUntil.getTime() / 1000)}:F>`, inline: true },
+              { name: 'Reason', value: reason, inline: false }
+            )
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [embed] });
+        } catch (error) {
+          await interaction.reply({ content: `❌ Failed to timeout user: ${error.message}`, ephemeral: true });
+        }
+      }
+    };
+
+    // Warn Command
+    const warnCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('warn')
+        .setDescription('Warn a user')
+        .addUserOption(option => 
+          option.setName('user')
+            .setDescription('The user to warn')
+            .setRequired(true))
+        .addStringOption(option =>
+          option.setName('reason')
+            .setDescription('Reason for warning')
+            .setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+      execute: async (interaction) => {
+        if (!this.hasPermission(interaction, PermissionFlagsBits.ModerateMembers)) {
+          return await interaction.reply({ content: '❌ You don\'t have permission to use this command.', ephemeral: true });
+        }
+
+        const user = interaction.options.getUser('user');
+        const reason = interaction.options.getString('reason');
+        
+        try {
+          await storage.createUserWarning({
+            serverId: interaction.guildId!,
+            userId: user.id,
+            username: user.username,
+            moderatorId: interaction.user.id,
+            moderatorUsername: interaction.user.username,
+            reason: reason
+          });
+          
+          const embed = new EmbedBuilder()
+            .setColor('#FEE75C')
+            .setTitle('User Warned')
+            .setDescription(`${user.tag} has been warned`)
+            .addFields({ name: 'Reason', value: reason })
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [embed] });
+          
+          // Try to DM the user
+          try {
+            await user.send(`⚠️ You have been warned in ${interaction.guild?.name} for: ${reason}`);
+          } catch {
+            // User has DMs disabled
+          }
+        } catch (error) {
+          await interaction.reply({ content: `❌ Failed to warn user: ${error.message}`, ephemeral: true });
+        }
+      }
+    };
+
+    // Coin Flip Command
+    const coinflipCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('coinflip')
+        .setDescription('Flip a coin - heads or tails!'),
+      execute: async (interaction) => {
+        const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
+        const emoji = result === 'Heads' ? '🟡' : '⚪';
+        
+        const embed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle('🪙 Coin Flip')
+          .setDescription(`${emoji} **${result}**!`)
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+
     // Add all commands to the collection
     this.commands.set('music', musicCommand);
     this.commands.set('ai', openaiCommand);
@@ -953,6 +1161,12 @@ export class EnhancedDiscordBot {
     this.commands.set('serverinfo', serverInfoCommand);
     this.commands.set('userinfo', userInfoCommand);
     this.commands.set('avatar', avatarCommand);
+    // Additional commands from old bot
+    this.commands.set('afk', afkCommand);
+    this.commands.set('clear', clearCommand);
+    this.commands.set('timeout', timeoutCommand);
+    this.commands.set('warn', warnCommand);
+    this.commands.set('coinflip', coinflipCommand);
   }
 
   // ============================================================================
@@ -2293,12 +2507,19 @@ export class EnhancedDiscordBot {
           channel: message.channel,
           channelId: message.channelId,
           options: {
-            getString: (name: string) => args[0] || null,
+            getSubcommand: () => args[0] || 'help',
+            getString: (name: string) => {
+              if (name === 'query' || name === 'message' || name === 'prompt' || name === 'text' || name === 'term' || name === 'location') {
+                return args.slice(1).join(' ') || args[0] || null;
+              }
+              return args[0] || null;
+            },
             getInteger: (name: string) => parseInt(args[0]) || null,
             getBoolean: (name: string) => args[0]?.toLowerCase() === 'true' || false,
             getUser: (name: string) => message.mentions.users.first() || null,
             getChannel: (name: string) => message.mentions.channels.first() || null,
             getRole: (name: string) => message.mentions.roles.first() || null,
+            getAttachment: (name: string) => message.attachments.first() || null,
           },
           reply: async (content: any) => {
             if (typeof content === 'string') {
