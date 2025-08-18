@@ -18,6 +18,7 @@ interface ConfigType {
   OPENAI_API_KEY: string;
   WEATHER_API_KEY: string;
   NEWS_API_KEY: string;
+  GENIUS_ACCESS_TOKEN: string;
   DEFAULT_PREFIX: string;
   SUPER_ADMIN_USER_ID: string;
   BOT_STATUS: {
@@ -89,6 +90,9 @@ export const config: ConfigType = {
   
   // News API for news commands (optional)
   NEWS_API_KEY: process.env.NEWS_API_KEY || '',
+  
+  // Genius API for lyrics lookup
+  GENIUS_ACCESS_TOKEN: process.env.GENIUS_ACCESS_TOKEN || '',
   
   // ============================================================================
   // BOT BEHAVIOR SETTINGS

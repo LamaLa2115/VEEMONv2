@@ -303,24 +303,46 @@ export class EnhancedDiscordBot {
         await interaction.deferReply();
         
         try {
-          // Initialize Genius client (requires GENIUS_ACCESS_TOKEN in environment)
-          const geniusClient = new Genius.Client();
-          const searches = await geniusClient.songs.search(query);
-          
-          let lyrics = null;
-          if (searches.length > 0) {
-            lyrics = await searches[0].lyrics();
+          // Check if we have Genius token
+          if (!config.GENIUS_ACCESS_TOKEN || config.GENIUS_ACCESS_TOKEN === 'your_genius_token_here') {
+            return await interaction.editReply({ 
+              content: `🎵 Lyrics service is not configured. Please contact the bot owner to set up Genius API access.` 
+            });
           }
           
-          if (!lyrics) {
+          // Initialize Genius client with token
+          const geniusClient = new Genius.Client(config.GENIUS_ACCESS_TOKEN);
+          const searches = await geniusClient.songs.search(query);
+          
+          if (!searches || searches.length === 0) {
             return await interaction.editReply({ 
-              content: `🎵 No lyrics found for "${query}". Try being more specific with artist name.` 
+              content: `🎵 No results found for "${query}". Try a different search term or include the artist name.` 
+            });
+          }
+          
+          const song = searches[0];
+          let lyrics = null;
+          
+          try {
+            lyrics = await song.lyrics();
+          } catch (lyricsError) {
+            console.error('Lyrics fetch error:', lyricsError);
+            return await interaction.editReply({ 
+              content: `🎵 Found "${song.title}" by ${song.artist.name} but couldn't fetch lyrics. The song might not have lyrics available.` 
+            });
+          }
+          
+          if (!lyrics || lyrics.length === 0) {
+            return await interaction.editReply({ 
+              content: `🎵 Found "${song.title}" by ${song.artist.name} but no lyrics are available.` 
             });
           }
           
           const embed = new EmbedBuilder()
             .setColor('#1DB954')
-            .setTitle(`🎵 Lyrics: ${query}`)
+            .setTitle(`🎵 ${song.title}`)
+            .setAuthor({ name: song.artist.name })
+            .setURL(song.url)
             .setTimestamp();
           
           if (showFull) {
@@ -983,6 +1005,11 @@ export class EnhancedDiscordBot {
           option.setName('reason')
             .setDescription('AFK reason (optional)')),
       execute: async (interaction) => {
+        // Bot owner bypass
+        if (!this.isSuperAdmin(interaction.user.id)) {
+          // Regular permission check if needed
+        }
+        
         const reason = interaction.options.getString('reason') || 'AFK';
         
         try {
@@ -1002,6 +1029,110 @@ export class EnhancedDiscordBot {
             content: '❌ Failed to set AFK status.',
             ephemeral: true 
           });
+        }
+      }
+    };
+
+    // Voicemaster Command - Complete voice channel management system
+    const voicemasterCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('voicemaster')
+        .setDescription('🔊 Complete voice channel management system')
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('lock')
+            .setDescription('🔒 Lock your voice channel'))
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('unlock')
+            .setDescription('🔓 Unlock your voice channel'))
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('limit')
+            .setDescription('👥 Set user limit for your voice channel')
+            .addIntegerOption(option =>
+              option.setName('max')
+                .setDescription('Maximum users (0 = no limit)')
+                .setRequired(true)
+                .setMinValue(0)
+                .setMaxValue(99)))
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('name')
+            .setDescription('📝 Change your voice channel name')
+            .addStringOption(option =>
+              option.setName('newname')
+                .setDescription('New channel name')
+                .setRequired(true)
+                .setMaxLength(100)))
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('invite')
+            .setDescription('➕ Invite a user to your voice channel')
+            .addUserOption(option =>
+              option.setName('user')
+                .setDescription('User to invite')
+                .setRequired(true)))
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('kick')
+            .setDescription('❌ Kick a user from your voice channel')
+            .addUserOption(option =>
+              option.setName('user')
+                .setDescription('User to kick')
+                .setRequired(true)))
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('transfer')
+            .setDescription('👑 Transfer channel ownership')
+            .addUserOption(option =>
+              option.setName('user')
+                .setDescription('New channel owner')
+                .setRequired(true)))
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('menu')
+            .setDescription('📋 Show interactive voice channel control menu')),
+      execute: async (interaction) => {
+        // Bot owner bypass
+        if (!this.isSuperAdmin(interaction.user.id)) {
+          // Check if user is in a voice channel
+          const member = interaction.member as GuildMember;
+          if (!member.voice.channel) {
+            return await interaction.reply({ 
+              content: '❌ You must be in a voice channel to use voicemaster commands.', 
+              ephemeral: true 
+            });
+          }
+        }
+
+        const subcommand = interaction.options.getSubcommand();
+        
+        switch (subcommand) {
+          case 'lock':
+            await this.handleVoiceLock(interaction);
+            break;
+          case 'unlock':
+            await this.handleVoiceUnlock(interaction);
+            break;
+          case 'limit':
+            await this.handleVoiceLimit(interaction);
+            break;
+          case 'name':
+            await this.handleVoiceName(interaction);
+            break;
+          case 'invite':
+            await this.handleVoiceInvite(interaction);
+            break;
+          case 'kick':
+            await this.handleVoiceKick(interaction);
+            break;
+          case 'transfer':
+            await this.handleVoiceTransfer(interaction);
+            break;
+          case 'menu':
+            await this.handleVoiceMenu(interaction);
+            break;
         }
       }
     };
@@ -1297,7 +1428,8 @@ export class EnhancedDiscordBot {
             '🎮 Games & Fun': ['fun - Games and entertainment', 'blackjack - Blackjack game', 'coinflip - Coin flip game'],
             '🌐 Information': ['weather - Weather information', 'news - Latest news headlines', 'avatar - User avatars'],
             '⚙️ Bot Controls': ['botinfo - Bot information', 'ping - Bot latency', 'help - This help menu'],
-            '💤 Utility': ['afk - Set AFK status']
+            '💤 Utility': ['afk - Set AFK status'],
+            '🔊 Voice': ['voicemaster - Complete voice channel management']
           };
 
           const embed = new EmbedBuilder()
@@ -1395,6 +1527,7 @@ export class EnhancedDiscordBot {
     this.commands.set('define', this.createDefineCommand());
     this.commands.set('ascii', this.createASCIICommand());
     this.commands.set('remind', this.createRemindCommand());
+    this.commands.set('voicemaster', voicemasterCommand);
   }
 
   // ============================================================================
@@ -3385,6 +3518,27 @@ export class EnhancedDiscordBot {
     this.client.on('messageCreate', async (message) => {
       if (message.author.bot) return;
       
+      // Check if user was AFK and welcome them back
+      try {
+        const afkUser = await storage.getAfkUser(message.author.id);
+        if (afkUser) {
+          // User was AFK, welcome them back
+          await storage.removeAfkUser(message.author.id);
+          const welcomeMessage = await message.reply(`Welcome back <@${message.author.id}>! You were AFK: ${afkUser.reason}`);
+          
+          // Delete the welcome message after 5 seconds to avoid spam
+          setTimeout(async () => {
+            try {
+              await welcomeMessage.delete();
+            } catch (error) {
+              // Message might already be deleted
+            }
+          }, 5000);
+        }
+      } catch (error) {
+        // AFK check failed, continue normally
+      }
+      
       // Get server prefix (default is comma)
       const prefix = config.DEFAULT_PREFIX;
       
@@ -3822,6 +3976,239 @@ export class EnhancedDiscordBot {
       .setTimestamp();
     
     return embed;
+  }
+
+  // ============================================================================
+  // VOICEMASTER HANDLERS
+  // ============================================================================
+  
+  private async handleVoiceLock(interaction: any) {
+    const member = interaction.member as GuildMember;
+    const voiceChannel = member.voice.channel;
+    
+    if (!voiceChannel) {
+      return await interaction.reply({ content: '❌ You must be in a voice channel.', ephemeral: true });
+    }
+    
+    try {
+      await voiceChannel.permissionOverwrites.edit(interaction.guild.roles.everyone, {
+        Connect: false
+      });
+      
+      const embed = new EmbedBuilder()
+        .setColor('#E74C3C')
+        .setTitle('🔒 Voice Channel Locked')
+        .setDescription(`**${voiceChannel.name}** has been locked`)
+        .setTimestamp();
+        
+      await interaction.reply({ embeds: [embed] });
+    } catch (error: any) {
+      await interaction.reply({ content: `❌ Failed to lock channel: ${error.message}`, ephemeral: true });
+    }
+  }
+  
+  private async handleVoiceUnlock(interaction: any) {
+    const member = interaction.member as GuildMember;
+    const voiceChannel = member.voice.channel;
+    
+    if (!voiceChannel) {
+      return await interaction.reply({ content: '❌ You must be in a voice channel.', ephemeral: true });
+    }
+    
+    try {
+      await voiceChannel.permissionOverwrites.edit(interaction.guild.roles.everyone, {
+        Connect: null
+      });
+      
+      const embed = new EmbedBuilder()
+        .setColor('#57F287')
+        .setTitle('🔓 Voice Channel Unlocked')
+        .setDescription(`**${voiceChannel.name}** has been unlocked`)
+        .setTimestamp();
+        
+      await interaction.reply({ embeds: [embed] });
+    } catch (error: any) {
+      await interaction.reply({ content: `❌ Failed to unlock channel: ${error.message}`, ephemeral: true });
+    }
+  }
+  
+  private async handleVoiceLimit(interaction: any) {
+    const member = interaction.member as GuildMember;
+    const voiceChannel = member.voice.channel;
+    const limit = interaction.options.getInteger('max');
+    
+    if (!voiceChannel) {
+      return await interaction.reply({ content: '❌ You must be in a voice channel.', ephemeral: true });
+    }
+    
+    try {
+      await voiceChannel.setUserLimit(limit);
+      
+      const embed = new EmbedBuilder()
+        .setColor('#3498DB')
+        .setTitle('👥 User Limit Set')
+        .setDescription(`**${voiceChannel.name}** user limit set to ${limit === 0 ? 'unlimited' : limit}`)
+        .setTimestamp();
+        
+      await interaction.reply({ embeds: [embed] });
+    } catch (error: any) {
+      await interaction.reply({ content: `❌ Failed to set user limit: ${error.message}`, ephemeral: true });
+    }
+  }
+  
+  private async handleVoiceName(interaction: any) {
+    const member = interaction.member as GuildMember;
+    const voiceChannel = member.voice.channel;
+    const newName = interaction.options.getString('newname');
+    
+    if (!voiceChannel) {
+      return await interaction.reply({ content: '❌ You must be in a voice channel.', ephemeral: true });
+    }
+    
+    try {
+      const oldName = voiceChannel.name;
+      await voiceChannel.setName(newName);
+      
+      const embed = new EmbedBuilder()
+        .setColor('#F1C40F')
+        .setTitle('📝 Channel Name Changed')
+        .setDescription(`Channel renamed from **${oldName}** to **${newName}**`)
+        .setTimestamp();
+        
+      await interaction.reply({ embeds: [embed] });
+    } catch (error: any) {
+      await interaction.reply({ content: `❌ Failed to change channel name: ${error.message}`, ephemeral: true });
+    }
+  }
+  
+  private async handleVoiceInvite(interaction: any) {
+    const member = interaction.member as GuildMember;
+    const voiceChannel = member.voice.channel;
+    const targetUser = interaction.options.getUser('user');
+    
+    if (!voiceChannel) {
+      return await interaction.reply({ content: '❌ You must be in a voice channel.', ephemeral: true });
+    }
+    
+    try {
+      await voiceChannel.permissionOverwrites.edit(targetUser, {
+        Connect: true,
+        ViewChannel: true
+      });
+      
+      const embed = new EmbedBuilder()
+        .setColor('#9B59B6')
+        .setTitle('➕ User Invited')
+        .setDescription(`**${targetUser.tag}** has been invited to **${voiceChannel.name}**`)
+        .setTimestamp();
+        
+      await interaction.reply({ embeds: [embed] });
+      
+      // Try to DM the user
+      try {
+        await targetUser.send(`🎤 You've been invited to join voice channel **${voiceChannel.name}** in **${interaction.guild.name}**!`);
+      } catch {
+        // User has DMs disabled
+      }
+    } catch (error: any) {
+      await interaction.reply({ content: `❌ Failed to invite user: ${error.message}`, ephemeral: true });
+    }
+  }
+  
+  private async handleVoiceKick(interaction: any) {
+    const member = interaction.member as GuildMember;
+    const voiceChannel = member.voice.channel;
+    const targetUser = interaction.options.getUser('user');
+    
+    if (!voiceChannel) {
+      return await interaction.reply({ content: '❌ You must be in a voice channel.', ephemeral: true });
+    }
+    
+    try {
+      const targetMember = await interaction.guild.members.fetch(targetUser.id);
+      
+      if (!targetMember.voice.channel || targetMember.voice.channel.id !== voiceChannel.id) {
+        return await interaction.reply({ content: '❌ That user is not in your voice channel.', ephemeral: true });
+      }
+      
+      await targetMember.voice.disconnect('Kicked by channel owner');
+      
+      const embed = new EmbedBuilder()
+        .setColor('#E74C3C')
+        .setTitle('❌ User Kicked')
+        .setDescription(`**${targetUser.tag}** has been kicked from **${voiceChannel.name}**`)
+        .setTimestamp();
+        
+      await interaction.reply({ embeds: [embed] });
+    } catch (error: any) {
+      await interaction.reply({ content: `❌ Failed to kick user: ${error.message}`, ephemeral: true });
+    }
+  }
+  
+  private async handleVoiceTransfer(interaction: any) {
+    const member = interaction.member as GuildMember;
+    const voiceChannel = member.voice.channel;
+    const targetUser = interaction.options.getUser('user');
+    
+    if (!voiceChannel) {
+      return await interaction.reply({ content: '❌ You must be in a voice channel.', ephemeral: true });
+    }
+    
+    try {
+      const targetMember = await interaction.guild.members.fetch(targetUser.id);
+      
+      if (!targetMember.voice.channel || targetMember.voice.channel.id !== voiceChannel.id) {
+        return await interaction.reply({ content: '❌ That user must be in your voice channel.', ephemeral: true });
+      }
+      
+      // Transfer ownership by giving full permissions to new owner
+      await voiceChannel.permissionOverwrites.edit(targetUser, {
+        ManageChannels: true,
+        Connect: true,
+        Speak: true,
+        MuteMembers: true,
+        DeafenMembers: true,
+        MoveMembers: true
+      });
+      
+      // Remove permissions from original owner
+      await voiceChannel.permissionOverwrites.edit(member.user, {
+        ManageChannels: null
+      });
+      
+      const embed = new EmbedBuilder()
+        .setColor('#F39C12')
+        .setTitle('👑 Ownership Transferred')
+        .setDescription(`**${targetUser.tag}** is now the owner of **${voiceChannel.name}**`)
+        .setTimestamp();
+        
+      await interaction.reply({ embeds: [embed] });
+    } catch (error: any) {
+      await interaction.reply({ content: `❌ Failed to transfer ownership: ${error.message}`, ephemeral: true });
+    }
+  }
+  
+  private async handleVoiceMenu(interaction: any) {
+    const member = interaction.member as GuildMember;
+    const voiceChannel = member.voice.channel;
+    
+    if (!voiceChannel) {
+      return await interaction.reply({ content: '❌ You must be in a voice channel.', ephemeral: true });
+    }
+    
+    const embed = new EmbedBuilder()
+      .setColor('#5865F2')
+      .setTitle('🔊 Voice Channel Control Panel')
+      .setDescription(`Managing: **${voiceChannel.name}**\nUsers: ${voiceChannel.members.size}/${voiceChannel.userLimit || '∞'}`)
+      .addFields(
+        { name: '🔒 Security', value: '`/voicemaster lock` - Lock channel\n`/voicemaster unlock` - Unlock channel', inline: true },
+        { name: '👥 Management', value: '`/voicemaster limit <max>` - Set user limit\n`/voicemaster name <name>` - Change name', inline: true },
+        { name: '👤 Users', value: '`/voicemaster invite <user>` - Invite user\n`/voicemaster kick <user>` - Kick user\n`/voicemaster transfer <user>` - Transfer ownership', inline: true }
+      )
+      .setFooter({ text: 'All commands require you to be in a voice channel' })
+      .setTimestamp();
+      
+    await interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
   // ============================================================================
