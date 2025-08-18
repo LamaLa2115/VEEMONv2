@@ -593,7 +593,10 @@ class DiscordBot {
       execute: async (interaction) => {
         const game = this.blackjackGames.get(interaction.user.id);
         if (!game || game.gameOver) {
-          return await interaction.reply({ content: 'You don\'t have an active blackjack game. Start one with /blackjack!', ephemeral: true });
+          return await interaction.reply({ 
+            content: 'You don\'t have an active blackjack game. Start one with /blackjack!', 
+            flags: 64 // ephemeral flag
+          });
         }
 
         const cards = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -689,7 +692,10 @@ class DiscordBot {
       execute: async (interaction) => {
         const game = this.blackjackGames.get(interaction.user.id);
         if (!game || game.gameOver) {
-          return await interaction.reply({ content: 'You don\'t have an active blackjack game. Start one with /blackjack!', ephemeral: true });
+          return await interaction.reply({ 
+            content: 'You don\'t have an active blackjack game. Start one with /blackjack!', 
+            flags: 64 // ephemeral flag
+          });
         }
 
         const getCardValue = (card: string) => {
@@ -1215,12 +1221,23 @@ class DiscordBot {
             .setName('nowplaying')
             .setDescription('Show the currently playing song')),
       execute: async (interaction) => {
-        const subcommand = interaction.options.getSubcommand();
+        let subcommand: string;
+        try {
+          subcommand = interaction.options.getSubcommand();
+        } catch (error) {
+          return await interaction.reply({ 
+            content: '❌ Please specify a music subcommand: `play`, `queue`, `stop`, `volume`, `pause`, `resume`, `skip`, or `nowplaying`', 
+            flags: 64 // ephemeral flag
+          });
+        }
         
         // Check if user is in a voice channel
         const member = interaction.member as GuildMember;
         if (!member?.voice?.channel) {
-          return await interaction.reply({ content: '❌ You need to be in a voice channel to use music commands!', ephemeral: true });
+          return await interaction.reply({ 
+            content: '❌ You need to be in a voice channel to use music commands!', 
+            flags: 64 // ephemeral flag
+          });
         }
         
         switch (subcommand) {
@@ -1305,7 +1322,10 @@ class DiscordBot {
             break;
             
           default:
-            await interaction.reply({ content: `The ${subcommand} command is not fully implemented yet.`, ephemeral: true });
+            await interaction.reply({ 
+              content: `The ${subcommand} command is not fully implemented yet.`, 
+              flags: 64 // ephemeral flag
+            });
         }
       }
     };
@@ -2042,7 +2062,7 @@ class DiscordBot {
               await hitCmd.execute(interaction);
             } catch (error) {
               console.error('Error executing hit via button:', error);
-              await interaction.reply({ content: 'There was an error processing your hit!', ephemeral: true });
+              await interaction.reply({ content: 'There was an error processing your hit!', flags: 64 });
             }
           }
         } else if (interaction.customId === 'blackjack_stand') {
@@ -2053,7 +2073,7 @@ class DiscordBot {
               await standCmd.execute(interaction);
             } catch (error) {
               console.error('Error executing stand via button:', error);
-              await interaction.reply({ content: 'There was an error processing your stand!', ephemeral: true });
+              await interaction.reply({ content: 'There was an error processing your stand!', flags: 64 });
             }
           }
         }
@@ -2074,7 +2094,7 @@ class DiscordBot {
         await storage.incrementCommandUsed(interaction.guild?.id || 'unknown');
       } catch (error) {
         console.error('Error executing slash command:', error);
-        const reply = { content: 'There was an error executing this command!', ephemeral: true };
+        const reply = { content: 'There was an error executing this command!', flags: 64 };
         
         if (interaction.replied || interaction.deferred) {
           await interaction.followUp(reply);
