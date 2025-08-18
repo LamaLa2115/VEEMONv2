@@ -1550,24 +1550,47 @@ class DiscordBot {
         
         console.log(`Registering ${commandData.length} slash commands:`, commandData.map(cmd => cmd.name).join(', '));
         
-        // Clear existing commands first
-        await rest.put(
-          Routes.applicationCommands(this.client.user!.id),
-          { body: [] }
-        );
-        
-        // Wait a moment then re-register
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
+        // Register commands globally for immediate availability
+        console.log('Registering global commands...');
         await rest.put(
           Routes.applicationCommands(this.client.user!.id),
           { body: commandData }
         );
+        console.log('✅ Global commands registered successfully');
         
-        console.log('Successfully registered slash commands.');
-        console.log('If new commands don\'t appear immediately, try: 1) Refresh Discord, 2) Leave and rejoin the server, 3) Wait up to 1 hour for global commands to sync');
+        // Also register for each guild for faster updates
+        for (const guild of this.client.guilds.cache.values()) {
+          try {
+            console.log(`Registering commands for guild: ${guild.name} (${guild.id})`);
+            await rest.put(
+              Routes.applicationGuildCommands(this.client.user!.id, guild.id),
+              { body: commandData }
+            );
+            console.log(`✅ Guild commands registered for ${guild.name}`);
+          } catch (guildError) {
+            console.error(`Failed to register commands for guild ${guild.name}:`, guildError);
+          }
+        }
+        
+        console.log('🎉 All slash commands registered successfully!');
+        console.log('💡 Commands should appear immediately. If not, try: 1) Refresh Discord, 2) Restart Discord client, 3) Leave and rejoin the server');
       } catch (error) {
         console.error('Error registering slash commands:', error);
+        
+        // Fallback: try guild-specific registration only
+        console.log('Attempting fallback guild registration...');
+        try {
+          const commandData = Array.from(this.commands.values()).map(command => command.data.toJSON());
+          for (const guild of this.client.guilds.cache.values()) {
+            await rest.put(
+              Routes.applicationGuildCommands(this.client.user!.id, guild.id),
+              { body: commandData }
+            );
+            console.log(`✅ Fallback registration completed for ${guild.name}`);
+          }
+        } catch (fallbackError) {
+          console.error('Fallback registration also failed:', fallbackError);
+        }
       }
     });
 
@@ -1597,6 +1620,8 @@ class DiscordBot {
     });
 
     this.client.on('guildCreate', async (guild) => {
+      console.log(`Bot joined new guild: ${guild.name} (${guild.id})`);
+      
       // Auto-create server entry when bot joins
       await storage.createServer({
         id: guild.id,
@@ -1611,6 +1636,21 @@ class DiscordBot {
       await storage.updateBotStats(guild.id, {
         activeMembers: guild.memberCount,
       });
+      
+      // Register slash commands for this new guild immediately
+      try {
+        const rest = new REST().setToken(process.env.DISCORD_BOT_TOKEN || '');
+        const commandData = Array.from(this.commands.values()).map(command => command.data.toJSON());
+        
+        console.log(`Registering ${commandData.length} commands for new guild: ${guild.name}`);
+        await rest.put(
+          Routes.applicationGuildCommands(this.client.user!.id, guild.id),
+          { body: commandData }
+        );
+        console.log(`✅ Commands registered for new guild: ${guild.name}`);
+      } catch (error) {
+        console.error(`Failed to register commands for new guild ${guild.name}:`, error);
+      }
     });
 
     // Join gate and counters
@@ -1964,6 +2004,10 @@ class DiscordBot {
 
   public getClient() {
     return this.client;
+  }
+
+  public getCommands() {
+    return this.commands;
   }
 }
 

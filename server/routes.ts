@@ -9,6 +9,7 @@ import {
   insertUserWarningSchema,
 } from "server/schema";
 import { z } from "zod";
+import { REST, Routes } from 'discord.js';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Start Discord bot
@@ -23,6 +24,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       guilds: client.guilds.cache.size,
       users: client.users.cache.size,
     });
+  });
+
+  // Manual slash command refresh endpoint
+  app.post("/api/bot/refresh-commands", async (req, res) => {
+    try {
+      const client = discordBot.getClient();
+      if (!client.isReady()) {
+        return res.status(503).json({ message: "Bot is not ready" });
+      }
+
+      const rest = new REST().setToken(process.env.DISCORD_BOT_TOKEN || '');
+      const commands = discordBot.getCommands();
+      const commandData = Array.from(commands.values()).map((command: any) => command.data.toJSON());
+
+      console.log(`Manual refresh: Registering ${commandData.length} slash commands`);
+
+      // Register globally
+      await rest.put(
+        Routes.applicationCommands(client.user!.id),
+        { body: commandData }
+      );
+
+      // Register for all guilds
+      const results: any[] = [];
+      const guilds = Array.from(client.guilds.cache.values());
+      for (const guild of guilds) {
+        try {
+          await rest.put(
+            Routes.applicationGuildCommands(client.user!.id, guild.id),
+            { body: commandData }
+          );
+          results.push({ guild: guild.name, status: 'success' });
+        } catch (error: any) {
+          results.push({ guild: guild.name, status: 'failed', error: error?.message || 'Unknown error' });
+        }
+      }
+
+      res.json({
+        message: 'Command refresh completed',
+        globalRegistration: 'success',
+        guildResults: results,
+        commandCount: commandData.length
+      });
+    } catch (error: any) {
+      console.error('Command refresh failed:', error);
+      res.status(500).json({ message: 'Failed to refresh commands', error: error?.message || 'Unknown error' });
+    }
   });
 
   // Server management

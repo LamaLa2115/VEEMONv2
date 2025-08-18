@@ -8,9 +8,12 @@ import {
   Volume2, 
   MessageSquare, 
   Users, 
-  Zap 
+  Zap,
+  RefreshCw 
 } from "lucide-react";
 import { useState } from "react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface QuickActionsProps {
   serverId: string;
@@ -18,6 +21,8 @@ interface QuickActionsProps {
 
 export function QuickActions({ serverId }: QuickActionsProps) {
   const [announcement, setAnnouncement] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { toast } = useToast();
 
   const quickActions = [
     {
@@ -53,6 +58,33 @@ export function QuickActions({ serverId }: QuickActionsProps) {
     }
   };
 
+  const refreshSlashCommands = async () => {
+    setIsRefreshing(true);
+    try {
+      const response = await fetch('/api/bot/refresh-commands', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      
+      if (response.ok) {
+        toast({
+          title: "Commands Refreshed",
+          description: `Successfully refreshed ${data.commandCount} commands`,
+        });
+      } else {
+        throw new Error(data.message || 'Failed to refresh commands');
+      }
+    } catch (error) {
+      toast({
+        title: "Refresh Failed",
+        description: "Failed to refresh slash commands. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
     <Card className="bg-discord-secondary border discord-border">
       <CardHeader className="border-b discord-border">
@@ -76,22 +108,39 @@ export function QuickActions({ serverId }: QuickActionsProps) {
           ))}
         </div>
 
+        {/* Slash Commands Refresh */}
+        <div className="border-t discord-border pt-4">
+          <Button
+            onClick={refreshSlashCommands}
+            disabled={isRefreshing}
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white text-sm"
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh Slash Commands'}
+          </Button>
+          <p className="text-xs discord-text-muted mt-2 text-center">
+            Use this if slash commands aren't showing up in Discord
+          </p>
+        </div>
+
         {/* Quick Announcement */}
-        <div className="space-y-2">
-          <Label className="text-sm discord-text-white">Send Announcement</Label>
-          <div className="flex space-x-2">
+        <div className="border-t discord-border pt-4">
+          <Label htmlFor="announcement" className="text-sm discord-text-white">
+            Quick Announcement
+          </Label>
+          <div className="flex mt-2 space-x-2">
             <Input
-              type="text"
-              placeholder="Type announcement..."
+              id="announcement"
+              placeholder="Type your message..."
               value={announcement}
               onChange={(e) => setAnnouncement(e.target.value)}
-              className="bg-discord-tertiary text-discord-white border discord-border text-sm"
+              className="flex-1 discord-input"
               onKeyPress={(e) => e.key === 'Enter' && handleAnnouncement()}
             />
-            <Button
+            <Button 
               onClick={handleAnnouncement}
-              size="sm"
-              className="bg-discord-green hover:bg-green-500 text-discord-dark"
+              disabled={!announcement.trim()}
+              className="bg-discord-blurple hover:bg-blue-600 text-white"
             >
               <MessageSquare className="h-4 w-4" />
             </Button>
