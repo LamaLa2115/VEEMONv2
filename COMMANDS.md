@@ -245,6 +245,26 @@ The bot supports two command formats:
 
 ---
 
+## 🤖 Bot Management
+
+### `/botinfo` or `,botinfo`
+**Description**: Display detailed information about the bot
+**Usage**: `/botinfo`
+**Information Shown**:
+- Bot name, ID, and creation date
+- Number of servers and commands
+- Current uptime and system stats
+- Memory usage and latency
+- Node.js version
+
+### `/reload` or `,reload`
+**Description**: Restart the entire bot (Admin only)
+**Usage**: `/reload`
+**Permissions**: Administrator
+**Note**: This command completely restarts the bot process. Use with caution as it will temporarily disconnect the bot.
+
+---
+
 ## 📝 Notes
 
 - **Permissions**: Each command shows the required Discord permissions

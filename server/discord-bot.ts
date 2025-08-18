@@ -1401,6 +1401,74 @@ class DiscordBot {
     this.commands.set('lock', lockCommand);
     this.commands.set('unlock', unlockCommand);
     this.commands.set('slowmode', slowmodeCommand);
+    
+    // Bot management commands
+    const botInfoCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('botinfo')
+        .setDescription('Display information about the bot'),
+      execute: async (interaction) => {
+        const botUser = this.client.user!;
+        const uptime = process.uptime();
+        const uptimeHours = Math.floor(uptime / 3600);
+        const uptimeMinutes = Math.floor((uptime % 3600) / 60);
+        const uptimeSeconds = Math.floor(uptime % 60);
+        
+        const embed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle('🤖 Bot Information')
+          .setThumbnail(botUser.displayAvatarURL())
+          .addFields(
+            { name: 'Bot Name', value: botUser.username, inline: true },
+            { name: 'Bot ID', value: botUser.id, inline: true },
+            { name: 'Created', value: `<t:${Math.floor(botUser.createdTimestamp / 1000)}:R>`, inline: true },
+            { name: 'Servers', value: this.client.guilds.cache.size.toString(), inline: true },
+            { name: 'Commands', value: this.commands.size.toString(), inline: true },
+            { name: 'Uptime', value: `${uptimeHours}h ${uptimeMinutes}m ${uptimeSeconds}s`, inline: true },
+            { name: 'Node.js Version', value: process.version, inline: true },
+            { name: 'Memory Usage', value: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`, inline: true },
+            { name: 'Latency', value: `${this.client.ws.ping}ms`, inline: true }
+          )
+          .setFooter({ text: 'Discord Bot Dashboard | Powered by Discord.js' })
+          .setTimestamp();
+          
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+
+    const reloadCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('reload')
+        .setDescription('Reload the bot (Owner only)')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+      execute: async (interaction) => {
+        // Check if user is bot owner or has admin permissions
+        if (!interaction.member?.permissions?.has(PermissionFlagsBits.Administrator)) {
+          await interaction.reply({ content: 'You need Administrator permissions to use this command.', ephemeral: true });
+          return;
+        }
+        
+        await interaction.reply({ content: '🔄 Reloading bot... This may take a moment.', ephemeral: true });
+        
+        console.log(`Bot reload requested by ${interaction.user.username} (${interaction.user.id})`);
+        
+        // Gracefully disconnect and restart
+        setTimeout(async () => {
+          try {
+            await this.client.destroy();
+            console.log('Bot disconnected for reload');
+            // Exit process - the process manager (like nodemon/tsx) will restart it
+            process.exit(0);
+          } catch (error) {
+            console.error('Error during bot reload:', error);
+            process.exit(1);
+          }
+        }, 1000);
+      }
+    };
+    
+    this.commands.set('botinfo', botInfoCommand);
+    this.commands.set('reload', reloadCommand);
   }
 
   private setupEventListeners() {

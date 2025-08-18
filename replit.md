@@ -23,7 +23,8 @@ Preferred communication style: Simple, everyday language.
   - Enhanced prefix command parsing to handle complex arguments and subcommands for full feature parity
   - **Added advanced moderation commands**: purge, lock/unlock channels, slowmode control
   - **Created comprehensive COMMANDS.md documentation** with usage examples and permission requirements
-  - Bot now supports 35+ commands including all essential moderation, music, utility, and fun features
+  - Bot now supports 37+ commands including all essential moderation, music, utility, and fun features
+  - **Added bot management commands**: botinfo (displays bot statistics) and reload (restarts bot)
 
 ## System Architecture
 
