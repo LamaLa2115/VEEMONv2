@@ -25,7 +25,7 @@ import {
   Bot
 } from "lucide-react";
 import { useBotStatus } from "@/hooks/use-bot-status";
-import type { BotStats } from "@shared/schema";
+import type { BotStats } from "server/schema";
 
 export default function Documentation() {
   const { data: botStatus } = useBotStatus();

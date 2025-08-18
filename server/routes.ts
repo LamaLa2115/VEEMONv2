@@ -7,7 +7,7 @@ import {
   insertCustomCommandSchema,
   insertModerationLogSchema,
   insertUserWarningSchema,
-} from "@shared/schema";
+} from "server/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -187,6 +187,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Guild info from Discord API
+  app.get("/api/discord/guilds", async (_req, res) => {
+    try {
+      const client = discordBot.getClient();
+      const guilds = client.guilds.cache.map(g => ({
+        id: g.id,
+        name: g.name,
+        iconURL: g.iconURL(),
+        memberCount: g.memberCount,
+        ownerID: g.ownerId,
+      }));
+      res.json(guilds);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch guilds" });
+    }
+  });
+
   app.get("/api/discord/guilds/:guildId", async (req, res) => {
     try {
       const client = discordBot.getClient();

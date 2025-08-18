@@ -24,11 +24,20 @@ export function QuickActions({ serverId }: QuickActionsProps) {
   });
 
   const handleEnableAutoMod = () => {
-    // This would trigger auto-moderation settings
-    toast({
-      title: "Auto-Mod Enabled",
-      description: "Auto-moderation has been enabled for this server.",
-    });
+    apiRequest('PATCH', `/api/servers/${serverId}`, { autoModEnabled: true })
+      .then(() => {
+        toast({
+          title: "Auto-Mod Enabled",
+          description: "Auto-moderation has been enabled for this server.",
+        });
+      })
+      .catch(() => {
+        toast({
+          title: "Failed to enable Auto-Mod",
+          description: "Please try again.",
+          variant: "destructive",
+        });
+      });
   };
 
   const handleClearQueue = () => {

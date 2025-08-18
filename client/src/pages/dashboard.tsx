@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { StatusCards } from "@/components/status-cards";
 import { ActivityFeed } from "@/components/activity-feed";
@@ -13,16 +14,27 @@ import type { BotStats } from "@shared/schema";
 
 export default function Dashboard() {
   const { data: botStatus } = useBotStatus();
-  
-  // Mock server ID for demo - in real app this would come from auth/context
-  const serverId = "123456789";
+
+  // Fetch guilds the bot is in and allow selection
+  const { data: guilds } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/discord/guilds"],
+  });
+  const [serverId, setServerId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!serverId && guilds && guilds.length > 0) {
+      setServerId(guilds[0].id);
+    }
+  }, [guilds, serverId]);
   
   const { data: serverStats } = useQuery<BotStats>({
     queryKey: ['/api/servers', serverId, 'stats'],
+    enabled: !!serverId,
   });
 
   const { data: serverInfo } = useQuery({
     queryKey: ['/api/discord/guilds', serverId],
+    enabled: !!serverId,
   });
 
   const handleRestartBot = async () => {
@@ -45,6 +57,19 @@ export default function Dashboard() {
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* Guild Selector */}
+              <select
+                className="bg-discord-tertiary text-discord-white border discord-border rounded-lg px-3 py-2 text-sm"
+                value={serverId || ''}
+                onChange={(e) => setServerId(e.target.value)}
+              >
+                {(guilds || []).map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+                {(!guilds || guilds.length === 0) && (
+                  <option value="">No guilds</option>
+                )}
+              </select>
               {/* Search Bar */}
               <div className="relative">
                 <Input
@@ -70,22 +95,26 @@ export default function Dashboard() {
         {/* Dashboard Content */}
         <div className="flex-1 p-6 overflow-y-auto">
           {/* Status Cards Row */}
-          <StatusCards serverId={serverId} stats={serverStats} />
+          {serverId ? (
+            <StatusCards serverId={serverId} stats={serverStats} />
+          ) : (
+            <div className="text-sm discord-text-muted">Select a server to view stats.</div>
+          )}
 
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
             {/* Recent Activity Panel */}
             <div className="lg:col-span-2">
-              <ActivityFeed serverId={serverId} />
+              {serverId && <ActivityFeed serverId={serverId} />}
             </div>
 
             {/* Quick Controls Panel */}
             <div className="space-y-6">
               {/* Music Player Widget */}
-              <MusicPlayer serverId={serverId} />
+              {serverId && <MusicPlayer serverId={serverId} />}
               
               {/* Quick Actions */}
-              <QuickActions serverId={serverId} />
+              {serverId && <QuickActions serverId={serverId} />}
             </div>
           </div>
 

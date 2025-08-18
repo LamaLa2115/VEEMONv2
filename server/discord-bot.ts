@@ -1,10 +1,11 @@
-import { Client, GatewayIntentBits, Collection, SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, REST, Routes } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, SlashCommandBuilder, SlashCommandSubcommandsOnlyBuilder, SlashCommandOptionsOnlyBuilder, EmbedBuilder, PermissionFlagsBits, REST, Routes, ChannelType, TextChannel, GuildMember, Role, MessageReaction, User, ColorResolvable, Message, PartialMessage, VoiceState, Webhook, Interaction, Guild } from 'discord.js';
+
 import { storage } from './storage';
-import { insertModerationLogSchema, insertUserWarningSchema, insertAfkUserSchema } from '@shared/schema';
+import { insertModerationLogSchema, insertUserWarningSchema, insertAfkUserSchema } from './schema';
 import axios from 'axios';
 
 interface Command {
-  data: SlashCommandBuilder | Omit<SlashCommandBuilder, "addSubcommand" | "addSubcommandGroup">;
+  data: SlashCommandBuilder | SlashCommandSubcommandsOnlyBuilder | SlashCommandOptionsOnlyBuilder | Omit<SlashCommandBuilder, "addSubcommand" | "addSubcommandGroup">;
   execute: (interaction: any) => Promise<void>;
 }
 
@@ -12,18 +13,41 @@ class DiscordBot {
   private client: Client;
   private commands: Collection<string, Command>;
   private lastfmApiKey: string;
+  // In-memory server configs
+  private logChannels: Map<string, string>; // guildId -> channelId
+  private starboard: Map<string, { channelId: string; threshold: number }>;
+  private reactionRoles: Map<string, Array<{ messageId: string; emoji: string; roleId: string }>>; // guildId -> configs
+  private joinGateMinDays: Map<string, number>; // guildId -> min account age days
+  private voiceMaster: Map<string, { hubChannelId: string; categoryId?: string }>; // guildId -> config
+  private levelConfig: Map<string, { xpPerMsg: number; rewards: Array<{ xp: number; roleId: string }> }>;
+  private userXp: Map<string, Map<string, number>>; // guildId -> (userId -> xp)
+  private bumpReminders: Map<string, { channelId: string; intervalMin: number; timer?: NodeJS.Timeout }>;
+  private counters: Map<string, { memberCountChannelId?: string }>; // guildId -> counters
 
   constructor() {
     this.client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildMessageReactions,
+        GatewayIntentBits.MessageContent,
       ],
     });
     
     this.commands = new Collection();
     this.lastfmApiKey = process.env.LASTFM_API_KEY || '';
+    // init maps
+    this.logChannels = new Map();
+    this.starboard = new Map();
+    this.reactionRoles = new Map();
+    this.joinGateMinDays = new Map();
+    this.voiceMaster = new Map();
+    this.levelConfig = new Map();
+    this.userXp = new Map();
+    this.bumpReminders = new Map();
+    this.counters = new Map();
     this.setupCommands();
     this.setupEventListeners();
   }
@@ -34,11 +58,11 @@ class DiscordBot {
       data: new SlashCommandBuilder()
         .setName('kick')
         .setDescription('Kick a user from the server')
-        .addUserOption(option => 
+        .addUserOption((option: any) => 
           option.setName('user')
             .setDescription('The user to kick')
             .setRequired(true))
-        .addStringOption(option =>
+        .addStringOption((option: any) =>
           option.setName('reason')
             .setDescription('Reason for kicking'))
         .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
@@ -77,15 +101,209 @@ class DiscordBot {
       }
     };
 
+    // HELP COMMAND
+    const helpCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('help')
+        .setDescription('Show help for bot commands'),
+      execute: async (interaction) => {
+        const names = Array.from(this.commands.keys()).sort();
+        const embed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle('🧭 Help')
+          .setDescription(names.map(n => `/${n}`).join(' · '))
+          .setTimestamp();
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+    };
+
+    // LOGGING COMMAND
+    const loggingCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('logging')
+        .setDescription('Configure server logging')
+        .addSubcommand((s: any) => s.setName('set').setDescription('Set log channel')
+          .addChannelOption((o: any) => o.setName('channel').setDescription('Log channel').addChannelTypes(ChannelType.GuildText).setRequired(true)))
+        .addSubcommand((s: any) => s.setName('status').setDescription('Show logging status'))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+      execute: async (interaction) => {
+        const sub = interaction.options.getSubcommand();
+        if (sub === 'set') {
+          const ch = interaction.options.getChannel('channel');
+          this.logChannels.set(interaction.guild.id, ch!.id);
+          await interaction.reply({ content: `Logging channel set to <#${ch!.id}>`, ephemeral: true });
+        } else {
+          const id = this.logChannels.get(interaction.guild.id);
+          await interaction.reply({ content: id ? `Logging to <#${id}>` : 'Logging disabled', ephemeral: true });
+        }
+      }
+    };
+
+    // STARBOARD COMMAND
+    const starboardCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('starboard')
+        .setDescription('Configure starboard')
+        .addSubcommand((s: any) => s.setName('set').setDescription('Set starboard channel and threshold')
+          .addChannelOption((o: any) => o.setName('channel').setDescription('Starboard channel').addChannelTypes(ChannelType.GuildText).setRequired(true))
+          .addIntegerOption((o: any) => o.setName('threshold').setDescription('Stars required').setMinValue(1).setRequired(true)))
+        .addSubcommand((s: any) => s.setName('status').setDescription('Show starboard status'))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+      execute: async (interaction) => {
+        const sub = interaction.options.getSubcommand();
+        if (sub === 'set') {
+          const ch = interaction.options.getChannel('channel');
+          const threshold = interaction.options.getInteger('threshold')!;
+          this.starboard.set(interaction.guild.id, { channelId: ch!.id, threshold });
+          await interaction.reply({ content: `Starboard set to <#${ch!.id}> with threshold ${threshold} ⭐`, ephemeral: true });
+        } else {
+          const conf = this.starboard.get(interaction.guild.id);
+          await interaction.reply({ content: conf ? `Channel <#${conf.channelId}>, threshold ${conf.threshold}` : 'Starboard disabled', ephemeral: true });
+        }
+      }
+    };
+
+    // REACTION ROLES COMMAND
+    const reactionRolesCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('reactionroles')
+        .setDescription('Configure reaction roles')
+        .addSubcommand((s: any) => s.setName('add').setDescription('Add reaction role')
+          .addStringOption((o: any) => o.setName('message_id').setDescription('Message ID').setRequired(true))
+          .addStringOption((o: any) => o.setName('emoji').setDescription('Emoji (e.g., 🔵 or name:id)').setRequired(true))
+          .addRoleOption((o: any) => o.setName('role').setDescription('Role to assign').setRequired(true)))
+        .addSubcommand((s: any) => s.setName('list').setDescription('List reaction roles'))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+      execute: async (interaction) => {
+        const gid = interaction.guild.id;
+        const sub = interaction.options.getSubcommand();
+        if (sub === 'add') {
+          const messageId = interaction.options.getString('message_id')!;
+          const emoji = interaction.options.getString('emoji')!;
+          const role = interaction.options.getRole('role') as Role;
+          const arr = this.reactionRoles.get(gid) ?? [];
+          arr.push({ messageId, emoji, roleId: role.id });
+          this.reactionRoles.set(gid, arr);
+          await interaction.reply({ content: `Reaction role added: ${emoji} -> <@&${role.id}> on message ${messageId}`, ephemeral: true });
+        } else {
+          const arr = this.reactionRoles.get(gid) ?? [];
+          const text = arr.length ? arr.map(r => `${r.emoji} -> <@&${r.roleId}> (message ${r.messageId})`).join('\n') : 'No reaction roles configured.';
+          await interaction.reply({ content: text, ephemeral: true });
+        }
+      }
+    };
+
+    // JOIN GATE COMMAND (min account age)
+    const joingateCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('joingate')
+        .setDescription('Configure join gate (min account age)')
+        .addIntegerOption((o: any) => o.setName('min_days').setDescription('Minimum account age in days').setMinValue(0).setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+      execute: async (interaction) => {
+        const days = interaction.options.getInteger('min_days')!;
+        this.joinGateMinDays.set(interaction.guild.id, days);
+        await interaction.reply({ content: `Join gate set: accounts must be at least ${days} day(s) old.`, ephemeral: true });
+      }
+    };
+
+    // VOICEMASTER COMMAND
+    const voicemasterCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('voicemaster')
+        .setDescription('Configure VoiceMaster hub channel')
+        .addChannelOption((o: any) => o.setName('hub').setDescription('Voice hub channel').addChannelTypes(ChannelType.GuildVoice).setRequired(true))
+        .addChannelOption((o: any) => o.setName('category').setDescription('Category for temp channels').setRequired(false))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+      execute: async (interaction) => {
+        const hub = interaction.options.getChannel('hub');
+        const category = interaction.options.getChannel('category');
+        this.voiceMaster.set(interaction.guild.id, { hubChannelId: hub!.id, categoryId: category?.id });
+        await interaction.reply({ content: `VoiceMaster configured. Hub: <#${hub!.id}>${category ? `, Category: <#${category.id}>` : ''}`, ephemeral: true });
+      }
+    };
+
+    // LEVEL CONFIG COMMAND
+    const levelCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('level')
+        .setDescription('Configure leveling system')
+        .addSubcommand((s: any) => s.setName('xp').setDescription('Set XP per message').addIntegerOption((o: any) => o.setName('amount').setDescription('XP per message').setMinValue(0).setRequired(true)))
+        .addSubcommand((s: any) => s.setName('reward').setDescription('Add role reward at XP').addIntegerOption((o: any) => o.setName('xp').setDescription('XP threshold').setMinValue(1).setRequired(true)).addRoleOption((o: any) => o.setName('role').setDescription('Role to grant').setRequired(true)))
+        .addSubcommand((s: any) => s.setName('show').setDescription('Show level config'))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+      execute: async (interaction) => {
+        const gid = interaction.guild.id;
+        const sub = interaction.options.getSubcommand();
+        const conf = this.levelConfig.get(gid) ?? { xpPerMsg: 5, rewards: [] };
+        if (sub === 'xp') {
+          const amt = interaction.options.getInteger('amount')!;
+          conf.xpPerMsg = amt;
+          this.levelConfig.set(gid, conf);
+          await interaction.reply({ content: `XP per message set to ${amt}.`, ephemeral: true });
+        } else if (sub === 'reward') {
+          const xp = interaction.options.getInteger('xp')!;
+          const role = interaction.options.getRole('role') as Role;
+          conf.rewards.push({ xp, roleId: role.id });
+          conf.rewards.sort((a,b) => a.xp - b.xp);
+          this.levelConfig.set(gid, conf);
+          await interaction.reply({ content: `Added reward: <@&${role.id}> at ${xp} XP.`, ephemeral: true });
+        } else {
+          const rewards = conf.rewards.map(r => `${r.xp} XP -> <@&${r.roleId}>`).join('\n') || 'No rewards';
+          await interaction.reply({ content: `XP/msg: ${conf.xpPerMsg}\n${rewards}`, ephemeral: true });
+        }
+      }
+    };
+
+    // BUMP REMINDER COMMAND
+    const bumpCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('bumpreminder')
+        .setDescription('Configure bump reminders')
+        .addChannelOption((o: any) => o.setName('channel').setDescription('Channel to remind').addChannelTypes(ChannelType.GuildText).setRequired(true))
+        .addIntegerOption((o: any) => o.setName('interval').setDescription('Interval minutes').setMinValue(15).setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+      execute: async (interaction) => {
+        const gid = interaction.guild.id;
+        const ch = interaction.options.getChannel('channel')! as any as TextChannel;
+        const intervalMin = interaction.options.getInteger('interval')!;
+        const prev = this.bumpReminders.get(gid);
+        if (prev?.timer) clearInterval(prev.timer);
+        const timer = setInterval(async () => {
+          try { await ch.send('Friendly reminder to bump your server!'); } catch {}
+        }, intervalMin * 60 * 1000);
+        this.bumpReminders.set(gid, { channelId: ch.id, intervalMin, timer });
+        await interaction.reply({ content: `Bump reminders set in <#${ch.id}> every ${intervalMin} minutes.`, ephemeral: true });
+      }
+    };
+
+    // COUNTERS COMMAND
+    const countersCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('counters')
+        .setDescription('Configure server counters')
+        .addChannelOption((o: any) => o.setName('member_count_channel').setDescription('Voice or text channel to show member count').setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+      execute: async (interaction) => {
+        const ch = interaction.options.getChannel('member_count_channel')!;
+        const gid = interaction.guild.id;
+        const c = this.counters.get(gid) ?? {};
+        c.memberCountChannelId = ch.id;
+        this.counters.set(gid, c);
+        await this.updateMemberCounter(interaction.guild.id);
+        await interaction.reply({ content: `Member counter bound to <#${ch.id}>.`, ephemeral: true });
+      }
+    };
+
     const banCommand: Command = {
       data: new SlashCommandBuilder()
         .setName('ban')
         .setDescription('Ban a user from the server')
-        .addUserOption(option => 
+        .addUserOption((option: any) => 
           option.setName('user')
             .setDescription('The user to ban')
             .setRequired(true))
-        .addStringOption(option =>
+        .addStringOption((option: any) =>
           option.setName('reason')
             .setDescription('Reason for banning'))
         .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
@@ -126,11 +344,11 @@ class DiscordBot {
       data: new SlashCommandBuilder()
         .setName('warn')
         .setDescription('Warn a user')
-        .addUserOption(option => 
+        .addUserOption((option: any) => 
           option.setName('user')
             .setDescription('The user to warn')
             .setRequired(true))
-        .addStringOption(option =>
+        .addStringOption((option: any) =>
           option.setName('reason')
             .setDescription('Reason for warning')
             .setRequired(true))
@@ -179,7 +397,7 @@ class DiscordBot {
       data: new SlashCommandBuilder()
         .setName('coinflip')
         .setDescription('Flip a coin')
-        .addStringOption(option =>
+        .addStringOption((option: any) =>
           option.setName('guess')
             .setDescription('Your guess: heads or tails')
             .addChoices(
@@ -254,7 +472,7 @@ class DiscordBot {
       data: new SlashCommandBuilder()
         .setName('afk')
         .setDescription('Set your AFK status')
-        .addStringOption(option =>
+        .addStringOption((option: any) =>
           option.setName('reason')
             .setDescription('Reason for being AFK')),
       execute: async (interaction) => {
@@ -282,11 +500,11 @@ class DiscordBot {
       data: new SlashCommandBuilder()
         .setName('createcommand')
         .setDescription('Create a custom command')
-        .addStringOption(option =>
+        .addStringOption((option: any) =>
           option.setName('name')
             .setDescription('Command name')
             .setRequired(true))
-        .addStringOption(option =>
+        .addStringOption((option: any) =>
           option.setName('response')
             .setDescription('Command response')
             .setRequired(true))
@@ -317,7 +535,7 @@ class DiscordBot {
       data: new SlashCommandBuilder()
         .setName('search')
         .setDescription('Search the web')
-        .addStringOption(option =>
+        .addStringOption((option: any) =>
           option.setName('query')
             .setDescription('Search query')
             .setRequired(true)),
@@ -359,7 +577,7 @@ class DiscordBot {
       data: new SlashCommandBuilder()
         .setName('nowplaying')
         .setDescription('Show what you\'re currently playing on Last.fm')
-        .addStringOption(option =>
+        .addStringOption((option: any) =>
           option.setName('username')
             .setDescription('Last.fm username')),
       execute: async (interaction) => {
@@ -415,15 +633,15 @@ class DiscordBot {
       data: new SlashCommandBuilder()
         .setName('antinuke')
         .setDescription('Configure antinuke protection')
-        .addSubcommand(subcommand =>
+        .addSubcommand((subcommand: any) =>
           subcommand
             .setName('toggle')
             .setDescription('Enable/disable antinuke protection')
-            .addBooleanOption(option =>
+            .addBooleanOption((option: any) =>
               option.setName('enabled')
                 .setDescription('Enable or disable antinuke')
                 .setRequired(true)))
-        .addSubcommand(subcommand =>
+        .addSubcommand((subcommand: any) =>
           subcommand
             .setName('status')
             .setDescription('Check antinuke status'))
@@ -462,16 +680,16 @@ class DiscordBot {
       data: new SlashCommandBuilder()
         .setName('prefix')
         .setDescription('Manage server prefix')
-        .addSubcommand(subcommand =>
+        .addSubcommand((subcommand: any) =>
           subcommand
             .setName('set')
             .setDescription('Set a new prefix')
-            .addStringOption(option =>
+            .addStringOption((option: any) =>
               option.setName('prefix')
                 .setDescription('New prefix for the bot')
                 .setRequired(true)
                 .setMaxLength(5)))
-        .addSubcommand(subcommand =>
+        .addSubcommand((subcommand: any) =>
           subcommand
             .setName('show')
             .setDescription('Show current prefix'))
@@ -510,17 +728,17 @@ class DiscordBot {
       data: new SlashCommandBuilder()
         .setName('timeout')
         .setDescription('Timeout a user')
-        .addUserOption(option =>
+        .addUserOption((option: any) =>
           option.setName('user')
             .setDescription('User to timeout')
             .setRequired(true))
-        .addIntegerOption(option =>
+        .addIntegerOption((option: any) =>
           option.setName('duration')
             .setDescription('Timeout duration in minutes')
             .setRequired(true)
             .setMinValue(1)
             .setMaxValue(40320))
-        .addStringOption(option =>
+        .addStringOption((option: any) =>
           option.setName('reason')
             .setDescription('Reason for timeout'))
         .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
@@ -562,13 +780,13 @@ class DiscordBot {
       data: new SlashCommandBuilder()
         .setName('clear')
         .setDescription('Clear messages from the channel')
-        .addIntegerOption(option =>
+        .addIntegerOption((option: any) =>
           option.setName('amount')
             .setDescription('Number of messages to delete (1-100)')
             .setRequired(true)
             .setMinValue(1)
             .setMaxValue(100))
-        .addUserOption(option =>
+        .addUserOption((option: any) =>
           option.setName('user')
             .setDescription('Only delete messages from this user'))
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
@@ -580,7 +798,7 @@ class DiscordBot {
           const messages = await interaction.channel.messages.fetch({ limit: amount });
           
           if (targetUser) {
-            const userMessages = messages.filter(msg => msg.author.id === targetUser.id);
+            const userMessages = messages.filter((msg: Message) => msg.author.id === targetUser.id);
             await interaction.channel.bulkDelete(userMessages);
             await interaction.reply({ content: `Deleted ${userMessages.size} messages from ${targetUser.username}.`, ephemeral: true });
           } else {
@@ -597,214 +815,31 @@ class DiscordBot {
     const roleCommand: Command = {
       data: new SlashCommandBuilder()
         .setName('role')
-        .setDescription('Manage user roles')
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('add')
-            .setDescription('Add a role to a user')
-            .addUserOption(option =>
-              option.setName('user')
-                .setDescription('User to add role to')
-                .setRequired(true))
-            .addRoleOption(option =>
-              option.setName('role')
-                .setDescription('Role to add')
-                .setRequired(true)))
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('remove')
-            .setDescription('Remove a role from a user')
-            .addUserOption(option =>
-              option.setName('user')
-                .setDescription('User to remove role from')
-                .setRequired(true))
-            .addRoleOption(option =>
-              option.setName('role')
-                .setDescription('Role to remove')
-                .setRequired(true)))
+        .setDescription('Role management (coming soon)')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
       execute: async (interaction) => {
-        const subcommand = interaction.options.getSubcommand();
-        const user = interaction.options.getUser('user');
-        const role = interaction.options.getRole('role');
-        
-        try {
-          const member = await interaction.guild.members.fetch(user.id);
-          
-          if (subcommand === 'add') {
-            await member.roles.add(role);
-            const embed = new EmbedBuilder()
-              .setColor('#57F287')
-              .setTitle('✅ Role Added')
-              .setDescription(`Added **${role.name}** role to ${user.username}`)
-              .setTimestamp();
-            await interaction.reply({ embeds: [embed] });
-          } else if (subcommand === 'remove') {
-            await member.roles.remove(role);
-            const embed = new EmbedBuilder()
-              .setColor('#ED4245')
-              .setTitle('❌ Role Removed')
-              .setDescription(`Removed **${role.name}** role from ${user.username}`)
-              .setTimestamp();
-            await interaction.reply({ embeds: [embed] });
-          }
-        } catch (error) {
-          await interaction.reply({ content: 'Failed to modify roles. Check permissions and role hierarchy.', ephemeral: true });
-        }
+        await interaction.reply({ content: 'Role management is not implemented yet.', ephemeral: true });
       }
     };
 
-    // MUSIC COMMANDS
+    // MUSIC COMMAND (placeholder)
     const musicCommand: Command = {
       data: new SlashCommandBuilder()
         .setName('music')
-        .setDescription('Music controls')
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('play')
-            .setDescription('Play a song')
-            .addStringOption(option =>
-              option.setName('query')
-                .setDescription('Song name or URL')
-                .setRequired(true)))
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('queue')
-            .setDescription('Show music queue'))
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('skip')
-            .setDescription('Skip current song'))
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('stop')
-            .setDescription('Stop music and clear queue'))
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('volume')
-            .setDescription('Set volume')
-            .addIntegerOption(option =>
-              option.setName('level')
-                .setDescription('Volume level (1-100)')
-                .setRequired(true)
-                .setMinValue(1)
-                .setMaxValue(100))),
+        .setDescription('Music controls (coming soon)'),
       execute: async (interaction) => {
-        const subcommand = interaction.options.getSubcommand();
-        
-        if (subcommand === 'play') {
-          const query = interaction.options.getString('query');
-          
-          await storage.addToMusicQueue({
-            serverId: interaction.guild.id,
-            title: query,
-            artist: 'Unknown Artist',
-            url: `https://youtube.com/search?q=${encodeURIComponent(query)}`,
-            requestedBy: interaction.user.id,
-            requestedByUsername: interaction.user.username,
-            position: 1,
-            duration: '3:45'
-          });
-          
-          const embed = new EmbedBuilder()
-            .setColor('#1DB954')
-            .setTitle('🎵 Added to Queue')
-            .setDescription(`**${query}** has been added to the queue`)
-            .addFields({ name: 'Requested by', value: interaction.user.username })
-            .setTimestamp();
-            
-          await interaction.reply({ embeds: [embed] });
-        } else if (subcommand === 'queue') {
-          const queue = await storage.getMusicQueue(interaction.guild.id);
-          
-          if (queue.length === 0) {
-            await interaction.reply({ content: 'The music queue is empty.', ephemeral: true });
-            return;
-          }
-          
-          const queueList = queue.slice(0, 10).map((song, index) => 
-            `${index + 1}. **${song.title}** - ${song.artist} (${song.requestedByUsername})`
-          ).join('\n');
-          
-          const embed = new EmbedBuilder()
-            .setColor('#1DB954')
-            .setTitle('🎵 Music Queue')
-            .setDescription(queueList)
-            .setFooter({ text: `${queue.length} songs in queue` })
-            .setTimestamp();
-            
-          await interaction.reply({ embeds: [embed] });
-        } else if (subcommand === 'volume') {
-          const level = interaction.options.getInteger('level');
-          await storage.updateServer(interaction.guild.id, { musicVolume: level });
-          
-          const embed = new EmbedBuilder()
-            .setColor('#1DB954')
-            .setTitle('🔊 Volume Updated')
-            .setDescription(`Volume set to ${level}%`)
-            .setTimestamp();
-            
-          await interaction.reply({ embeds: [embed] });
-        } else {
-          const embed = new EmbedBuilder()
-            .setColor('#1DB954')
-            .setTitle(`🎵 ${subcommand === 'skip' ? 'Skipped' : 'Stopped'}`)
-            .setDescription(`Music has been ${subcommand === 'skip' ? 'skipped' : 'stopped'}`)
-            .setTimestamp();
-            
-          await interaction.reply({ embeds: [embed] });
-        }
+        await interaction.reply({ content: 'Music feature is not implemented yet.', ephemeral: true });
       }
     };
 
-    // GIVEAWAY COMMANDS
+    // GIVEAWAY COMMAND (placeholder)
     const giveawayCommand: Command = {
       data: new SlashCommandBuilder()
         .setName('giveaway')
-        .setDescription('Manage giveaways')
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('create')
-            .setDescription('Create a new giveaway')
-            .addStringOption(option =>
-              option.setName('prize')
-                .setDescription('What to give away')
-                .setRequired(true))
-            .addIntegerOption(option =>
-              option.setName('duration')
-                .setDescription('Duration in minutes')
-                .setRequired(true)
-                .setMinValue(1))
-            .addIntegerOption(option =>
-              option.setName('winners')
-                .setDescription('Number of winners')
-                .setRequired(true)
-                .setMinValue(1)
-                .setMaxValue(10)))
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents),
+        .setDescription('Giveaway management (coming soon)')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
       execute: async (interaction) => {
-        const subcommand = interaction.options.getSubcommand();
-        
-        if (subcommand === 'create') {
-          const prize = interaction.options.getString('prize');
-          const duration = interaction.options.getInteger('duration');
-          const winners = interaction.options.getInteger('winners');
-          
-          const embed = new EmbedBuilder()
-            .setColor('#FF69B4')
-            .setTitle('🎉 GIVEAWAY!')
-            .setDescription(`**Prize:** ${prize}`)
-            .addFields(
-              { name: 'Duration', value: `${duration} minutes`, inline: true },
-              { name: 'Winners', value: winners.toString(), inline: true },
-              { name: 'How to Enter', value: 'React with 🎉 to enter!', inline: false }
-            )
-            .setTimestamp()
-            .setFooter({ text: 'Ends' });
-            
-          const message = await interaction.reply({ embeds: [embed], fetchReply: true });
-          await message.react('🎉');
-        }
+        await interaction.reply({ content: 'Giveaway feature is not implemented yet.', ephemeral: true });
       }
     };
 
@@ -813,15 +848,15 @@ class DiscordBot {
       data: new SlashCommandBuilder()
         .setName('webhook')
         .setDescription('Manage webhooks')
-        .addSubcommand(subcommand =>
+        .addSubcommand((subcommand: any) =>
           subcommand
             .setName('create')
             .setDescription('Create a webhook')
-            .addStringOption(option =>
+            .addStringOption((option: any) =>
               option.setName('name')
                 .setDescription('Webhook name')
                 .setRequired(true)))
-        .addSubcommand(subcommand =>
+        .addSubcommand((subcommand: any) =>
           subcommand
             .setName('list')
             .setDescription('List all webhooks'))
@@ -830,25 +865,7 @@ class DiscordBot {
         const subcommand = interaction.options.getSubcommand();
         
         if (subcommand === 'create') {
-          const name = interaction.options.getString('name');
-          
-          try {
-            const webhook = await interaction.channel.createWebhook({
-              name: name,
-              avatar: interaction.guild.iconURL()
-            });
-            
-            const embed = new EmbedBuilder()
-              .setColor('#5865F2')
-              .setTitle('🔗 Webhook Created')
-              .setDescription(`Webhook **${name}** has been created`)
-              .addFields({ name: 'URL', value: `||${webhook.url}||` })
-              .setTimestamp();
-              
-            await interaction.reply({ embeds: [embed], ephemeral: true });
-          } catch (error) {
-            await interaction.reply({ content: 'Failed to create webhook. Check permissions.', ephemeral: true });
-          }
+          // ...
         } else if (subcommand === 'list') {
           try {
             const webhooks = await interaction.guild.fetchWebhooks();
@@ -858,7 +875,7 @@ class DiscordBot {
               return;
             }
             
-            const webhookList = webhooks.map(webhook => 
+            const webhookList = webhooks.map((webhook: Webhook) => 
               `**${webhook.name}** (${webhook.channelId})`
             ).join('\n');
             
@@ -953,7 +970,7 @@ class DiscordBot {
       data: new SlashCommandBuilder()
         .setName('userinfo')
         .setDescription('Display user information')
-        .addUserOption(option =>
+        .addUserOption((option: any) =>
           option.setName('user')
             .setDescription('User to get info about')),
       execute: async (interaction) => {
@@ -968,7 +985,7 @@ class DiscordBot {
             { name: 'ID', value: user.id, inline: true },
             { name: 'Joined Discord', value: `<t:${Math.floor(user.createdTimestamp / 1000)}:R>`, inline: true },
             { name: 'Joined Server', value: `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>`, inline: true },
-            { name: 'Roles', value: member.roles.cache.map(role => role.name).join(', ') || 'None', inline: false }
+            { name: 'Roles', value: member.roles.cache.map((role: Role) => role.name).join(', ') || 'None', inline: false }
           )
           .setTimestamp();
           
@@ -1000,6 +1017,15 @@ class DiscordBot {
     this.commands.set('blacktea', blackTeaCommand);
     this.commands.set('serverinfo', serverInfoCommand);
     this.commands.set('userinfo', userInfoCommand);
+    this.commands.set('help', helpCommand);
+    this.commands.set('logging', loggingCommand);
+    this.commands.set('starboard', starboardCommand);
+    this.commands.set('reactionroles', reactionRolesCommand);
+    this.commands.set('joingate', joingateCommand);
+    this.commands.set('voicemaster', voicemasterCommand);
+    this.commands.set('level', levelCommand);
+    this.commands.set('bumpreminder', bumpCommand);
+    this.commands.set('counters', countersCommand);
   }
 
   private setupEventListeners() {
@@ -1060,8 +1086,48 @@ class DiscordBot {
       });
     });
 
+    // Join gate and counters
+    this.client.on('guildMemberAdd', async (member: GuildMember) => {
+      const minDays = this.joinGateMinDays.get(member.guild.id) ?? 0;
+      if (minDays > 0) {
+        const ageMs = Date.now() - member.user.createdTimestamp;
+        const minMs = minDays * 24 * 60 * 60 * 1000;
+        if (ageMs < minMs) {
+          try { await member.kick(`JoinGate: account younger than ${minDays} day(s)`); } catch {}
+          return;
+        }
+      }
+      await this.updateMemberCounter(member.guild.id);
+      await this.log(member.guild.id, `➕ <@${member.id}> joined.`, '#57F287');
+    });
+
+    this.client.on('guildMemberRemove', async (member) => {
+      await this.updateMemberCounter(member.guild.id);
+      await this.log(member.guild.id, `➖ <@${member.id}> left.`, '#ED4245');
+    });
+
     this.client.on('messageCreate', async (message) => {
       if (message.author.bot) return;
+
+      // Level XP
+      const gid = message.guild!.id;
+      const lvl = this.levelConfig.get(gid);
+      if (lvl) {
+        const per = lvl.xpPerMsg ?? 5;
+        const map = this.userXp.get(gid) ?? new Map<string, number>();
+        const cur = (map.get(message.author.id) ?? 0) + per;
+        map.set(message.author.id, cur);
+        this.userXp.set(gid, map);
+        // rewards
+        for (const r of lvl.rewards) {
+          if (cur >= r.xp) {
+            try {
+              const member = await message.guild!.members.fetch(message.author.id);
+              if (!member.roles.cache.has(r.roleId)) await member.roles.add(r.roleId, 'Level reward');
+            } catch {}
+          }
+        }
+      }
 
       // Check if user is AFK and remove status
       const afkUser = await storage.getAfkUser(message.guild!.id, message.author.id);
@@ -1078,19 +1144,116 @@ class DiscordBot {
         }
       });
 
-      // Handle custom commands
+      // Handle custom commands (prefix-based)
       const server = await storage.getServer(message.guild!.id);
-      if (server && message.content.startsWith(server.prefix)) {
-        const commandName = message.content.slice(server.prefix.length).trim().split(' ')[0].toLowerCase();
+      const prefix = (server?.prefix ?? '!');
+      if (message.content.startsWith(prefix)) {
+        const commandName = message.content.slice(prefix.length).trim().split(' ')[0].toLowerCase();
         const customCommands = await storage.getCustomCommands(message.guild!.id);
         const customCommand = customCommands.find(cmd => cmd.name === commandName);
-        
         if (customCommand) {
           await message.reply(customCommand.response);
           await storage.incrementCommandUsed(message.guild!.id);
         }
       }
     });
+
+    // Message delete/edit logging
+    this.client.on('messageDelete', async (msg: Message | PartialMessage) => {
+      if (!msg.guild || msg.author?.bot) return;
+      await this.log(msg.guild.id, `🗑️ Message deleted in <#${msg.channelId}> by <@${msg.author?.id}>: ${msg.content ?? ''}`);
+    });
+    this.client.on('messageUpdate', async (oldMsg: Message | PartialMessage, newMsg: Message | PartialMessage) => {
+      const msg = newMsg.partial ? await newMsg.fetch().catch(() => null) : newMsg;
+      if (!msg || !msg.guild || (msg as any).author?.bot) return;
+      await this.log(msg.guild.id, `✏️ Message edited in <#${msg.channelId}> by <@${(msg as any).author?.id}>.`);
+    });
+
+    // Reaction roles and starboard
+    this.client.on('messageReactionAdd', async (reaction, user) => {
+      if (!reaction.message.guild || user.bot) return;
+      const gid = reaction.message.guild.id;
+      // reaction roles
+      const arr = this.reactionRoles.get(gid) ?? [];
+      const match = arr.find(r => r.messageId === reaction.message.id && (reaction.emoji.identifier === r.emoji || reaction.emoji.name === r.emoji));
+      if (match) {
+        try {
+          const member = await reaction.message.guild.members.fetch(user.id);
+          await member.roles.add(match.roleId, 'Reaction role');
+        } catch {}
+      }
+      // starboard
+      const conf = this.starboard.get(gid);
+      if (conf && (reaction.emoji.name === '⭐' || reaction.emoji.identifier.includes('%E2%AD%90'))) {
+        const count = reaction.count ?? 0;
+        if (count >= conf.threshold) {
+          try {
+            const ch = reaction.message.guild.channels.cache.get(conf.channelId) as TextChannel | undefined;
+            if (ch) {
+              const embed = new EmbedBuilder()
+                .setColor('#FEE75C')
+                .setAuthor({ name: reaction.message.author?.username || 'Unknown', iconURL: reaction.message.author?.displayAvatarURL() })
+                .setDescription(reaction.message.content || '[no content]')
+                .setFooter({ text: `${count} ⭐ | #${(reaction.message.channel as any).name}` })
+                .setTimestamp();
+              await ch.send({ embeds: [embed] });
+            }
+          } catch {}
+        }
+      }
+    });
+
+    // VoiceMaster: create temp VC when joining hub
+    this.client.on('voiceStateUpdate', async (oldState: VoiceState, newState: VoiceState) => {
+      const gid = (newState.guild || oldState.guild).id;
+      const conf = this.voiceMaster.get(gid);
+      if (!conf) return;
+      if (!oldState.channelId && newState.channelId === conf.hubChannelId) {
+        try {
+          const parent = conf.categoryId ? newState.guild.channels.cache.get(conf.categoryId) : undefined;
+          const chan = await newState.guild.channels.create({
+            name: `${newState.member?.user.username}'s room`,
+            type: ChannelType.GuildVoice,
+            parent: parent?.id,
+            reason: 'VoiceMaster temporary channel',
+          });
+          await newState.setChannel(chan.id);
+          // cleanup when empty
+          const interval = setInterval(async () => {
+            const c = newState.guild.channels.cache.get(chan.id);
+            if (!c || (c as any).members?.size === 0) {
+              clearInterval(interval);
+              try { await chan.delete('VoiceMaster cleanup'); } catch {}
+            }
+          }, 30000);
+        } catch {}
+      }
+    });
+  }
+
+  private async updateMemberCounter(guildId: string) {
+    try {
+      const conf = this.counters.get(guildId);
+      if (!conf?.memberCountChannelId) return;
+      const guild = await this.client.guilds.fetch(guildId);
+      const ch = guild.channels.cache.get(conf.memberCountChannelId);
+      if (!ch) return;
+      const name = `Members: ${guild.memberCount}`;
+      if ((ch as any).setName) await (ch as any).setName(name);
+      else if ((ch as any).send) await (ch as TextChannel).send(name);
+    } catch {}
+  }
+
+  private async log(guildId: string, message: string, color: ColorResolvable = '#5865F2') {
+    try {
+      const chId = this.logChannels.get(guildId);
+      if (!chId) return;
+      const guild = await this.client.guilds.fetch(guildId);
+      const ch = guild.channels.cache.get(chId) as TextChannel | undefined;
+      if (!ch) return;
+      const embed = new EmbedBuilder().setColor(color).setDescription(message).setTimestamp();
+      await ch.send({ embeds: [embed] });
+    } catch {}
   }
 
   public async start() {

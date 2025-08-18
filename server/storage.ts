@@ -15,7 +15,7 @@ import {
   type InsertBotStats,
   type User, 
   type InsertUser 
-} from "@shared/schema";
+} from "server/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {

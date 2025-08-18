@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Users, Terminal, Shield, Music } from "lucide-react";
-import type { BotStats } from "@shared/schema";
+import type { BotStats } from "server/schema";
 
 interface StatusCardsProps {
   serverId: string;
