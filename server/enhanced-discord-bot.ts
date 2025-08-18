@@ -2,7 +2,7 @@ import {
   Client, GatewayIntentBits, Collection, SlashCommandBuilder, EmbedBuilder, 
   PermissionFlagsBits, REST, Routes, ChannelType, TextChannel, GuildMember, 
   Role, ActionRowBuilder, ButtonBuilder, ButtonStyle, VoiceChannel,
-  AttachmentBuilder, ColorResolvable, VoiceState
+  AttachmentBuilder, ColorResolvable, VoiceState, ModalBuilder, TextInputBuilder, TextInputStyle
 } from 'discord.js';
 import { 
   joinVoiceChannel, 
@@ -1557,6 +1557,7 @@ export class EnhancedDiscordBot {
     this.commands.set('bumpreminder', this.createBumpReminderCommand());
     this.commands.set('giveaway', this.createGiveawayCommand());
     this.commands.set('webhook', this.createWebhookCommand());
+    this.commands.set('servers', this.createServerManagementCommand());
   }
 
   // ============================================================================
@@ -3521,25 +3522,29 @@ export class EnhancedDiscordBot {
           }
         }
       } else if (interaction.isButton()) {
-        // Handle button interactions for command menus
+        // Handle button interactions for command menus and games
         try {
-          await this.handleButtonInteraction(interaction);
+          if (interaction.customId.startsWith('blackjack_')) {
+            await this.handleBlackjackButton(interaction);
+          } else {
+            await this.handleButtonInteraction(interaction);
+          }
         } catch (error: any) {
           console.error('Button interaction error:', error);
           if (!interaction.replied) {
             await interaction.reply({ content: '❌ An error occurred.', ephemeral: true });
           }
         }
-      }
-    });
-
-    // Handle button interactions
-    this.client.on('interactionCreate', async (interaction) => {
-      if (!interaction.isButton()) return;
-      
-      // Handle blackjack game buttons
-      if (interaction.customId.startsWith('blackjack_')) {
-        await this.handleBlackjackButton(interaction);
+      } else if (interaction.isModalSubmit()) {
+        // Handle modal interactions
+        try {
+          await this.handleModalInteraction(interaction);
+        } catch (error: any) {
+          console.error('Modal interaction error:', error);
+          if (!interaction.replied) {
+            await interaction.reply({ content: '❌ An error occurred.', ephemeral: true });
+          }
+        }
       }
     });
 
@@ -3549,10 +3554,10 @@ export class EnhancedDiscordBot {
       
       // Check if user was AFK and welcome them back
       try {
-        const afkUser = await storage.getAfkUser(message.author.id);
+        const afkUser = await storage.getAfkUser(message.guild?.id || 'DM', message.author.id);
         if (afkUser) {
           // User was AFK, welcome them back
-          await storage.removeAfkUser(message.author.id);
+          await storage.removeAfkUser(message.guild?.id || 'DM', message.author.id);
           const welcomeMessage = await message.reply(`Welcome back <@${message.author.id}>! You were AFK: ${afkUser.reason}`);
           
           // Delete the welcome message after 5 seconds to avoid spam
@@ -4421,6 +4426,442 @@ export class EnhancedDiscordBot {
 
         await interaction.showModal(renameModal);
         break;
+      case 'voice_invite':
+        // Show modal for inviting user
+        const inviteModal = new ModalBuilder()
+          .setCustomId('voice_invite_modal')
+          .setTitle('Invite User to Voice Channel');
+
+        const userInput = new TextInputBuilder()
+          .setCustomId('user_input')
+          .setLabel('User ID or @mention')
+          .setStyle(TextInputStyle.Short)
+          .setMinLength(1)
+          .setMaxLength(100)
+          .setRequired(true)
+          .setPlaceholder('@username or user ID');
+
+        const userActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(userInput);
+        inviteModal.addComponents(userActionRow);
+
+        await interaction.showModal(inviteModal);
+        break;
+      case 'voice_kick':
+        // Show modal for kicking user
+        const kickModal = new ModalBuilder()
+          .setCustomId('voice_kick_modal')
+          .setTitle('Kick User from Voice Channel');
+
+        const kickUserInput = new TextInputBuilder()
+          .setCustomId('kick_user_input')
+          .setLabel('User ID or @mention')
+          .setStyle(TextInputStyle.Short)
+          .setMinLength(1)
+          .setMaxLength(100)
+          .setRequired(true)
+          .setPlaceholder('@username or user ID');
+
+        const kickUserActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(kickUserInput);
+        kickModal.addComponents(kickUserActionRow);
+
+        await interaction.showModal(kickModal);
+        break;
+      case 'voice_transfer':
+        // Show modal for transferring ownership
+        const transferModal = new ModalBuilder()
+          .setCustomId('voice_transfer_modal')
+          .setTitle('Transfer Voice Channel Ownership');
+
+        const transferUserInput = new TextInputBuilder()
+          .setCustomId('transfer_user_input')
+          .setLabel('New Owner (ID or @mention)')
+          .setStyle(TextInputStyle.Short)
+          .setMinLength(1)
+          .setMaxLength(100)
+          .setRequired(true)
+          .setPlaceholder('@username or user ID');
+
+        const transferUserActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(transferUserInput);
+        transferModal.addComponents(transferUserActionRow);
+
+        await interaction.showModal(transferModal);
+        break;
+    }
+  }
+
+  // ============================================================================
+  // MODAL INTERACTION HANDLER
+  // ============================================================================
+  
+  private async handleModalInteraction(interaction: any) {
+    const customId = interaction.customId;
+    const member = interaction.member as GuildMember;
+    const voiceChannel = member.voice.channel;
+    
+    if (!voiceChannel) {
+      return await interaction.reply({ content: '❌ You must be in a voice channel.', ephemeral: true });
+    }
+    
+    switch (customId) {
+      case 'voice_limit_modal':
+        const limit = parseInt(interaction.fields.getTextInputValue('limit_input'));
+        if (isNaN(limit) || limit < 0 || limit > 99) {
+          return await interaction.reply({ content: '❌ Please enter a valid number between 0-99.', ephemeral: true });
+        }
+        
+        try {
+          await voiceChannel.setUserLimit(limit);
+          const embed = new EmbedBuilder()
+            .setColor('#3498DB')
+            .setTitle('👥 User Limit Set')
+            .setDescription(`**${voiceChannel.name}** user limit set to ${limit === 0 ? 'unlimited' : limit}`)
+            .setTimestamp();
+          await interaction.reply({ embeds: [embed] });
+        } catch (error: any) {
+          await interaction.reply({ content: `❌ Failed to set user limit: ${error.message}`, ephemeral: true });
+        }
+        break;
+        
+      case 'voice_rename_modal':
+        const newName = interaction.fields.getTextInputValue('name_input');
+        if (!newName || newName.length < 1 || newName.length > 100) {
+          return await interaction.reply({ content: '❌ Channel name must be 1-100 characters.', ephemeral: true });
+        }
+        
+        try {
+          const oldName = voiceChannel.name;
+          await voiceChannel.setName(newName);
+          const embed = new EmbedBuilder()
+            .setColor('#F1C40F')
+            .setTitle('📝 Channel Name Changed')
+            .setDescription(`Channel renamed from **${oldName}** to **${newName}**`)
+            .setTimestamp();
+          await interaction.reply({ embeds: [embed] });
+        } catch (error: any) {
+          await interaction.reply({ content: `❌ Failed to rename channel: ${error.message}`, ephemeral: true });
+        }
+        break;
+        
+      case 'voice_invite_modal':
+        const userInput = interaction.fields.getTextInputValue('user_input');
+        try {
+          let targetUser;
+          // Try to parse user ID or mention
+          const userIdMatch = userInput.match(/<@!?(\d+)>/) || userInput.match(/^(\d+)$/);
+          if (userIdMatch) {
+            targetUser = await interaction.guild.members.fetch(userIdMatch[1] || userIdMatch[0]);
+          } else {
+            return await interaction.reply({ content: '❌ Please provide a valid user ID or @mention.', ephemeral: true });
+          }
+          
+          await voiceChannel.permissionOverwrites.edit(targetUser.user, {
+            Connect: true
+          });
+          
+          const embed = new EmbedBuilder()
+            .setColor('#57F287')
+            .setTitle('➕ User Invited')
+            .setDescription(`**${targetUser.user.tag}** has been invited to **${voiceChannel.name}**`)
+            .setTimestamp();
+          await interaction.reply({ embeds: [embed] });
+        } catch (error: any) {
+          await interaction.reply({ content: `❌ Failed to invite user: ${error.message}`, ephemeral: true });
+        }
+        break;
+        
+      case 'voice_kick_modal':
+        const kickUserInput = interaction.fields.getTextInputValue('kick_user_input');
+        try {
+          let targetUser;
+          const userIdMatch = kickUserInput.match(/<@!?(\d+)>/) || kickUserInput.match(/^(\d+)$/);
+          if (userIdMatch) {
+            targetUser = await interaction.guild.members.fetch(userIdMatch[1] || userIdMatch[0]);
+          } else {
+            return await interaction.reply({ content: '❌ Please provide a valid user ID or @mention.', ephemeral: true });
+          }
+          
+          if (!targetUser.voice.channel || targetUser.voice.channel.id !== voiceChannel.id) {
+            return await interaction.reply({ content: '❌ That user is not in your voice channel.', ephemeral: true });
+          }
+          
+          await targetUser.voice.disconnect('Kicked by channel owner');
+          
+          const embed = new EmbedBuilder()
+            .setColor('#E74C3C')
+            .setTitle('❌ User Kicked')
+            .setDescription(`**${targetUser.user.tag}** has been kicked from **${voiceChannel.name}**`)
+            .setTimestamp();
+          await interaction.reply({ embeds: [embed] });
+        } catch (error: any) {
+          await interaction.reply({ content: `❌ Failed to kick user: ${error.message}`, ephemeral: true });
+        }
+        break;
+        
+      case 'voice_transfer_modal':
+        const transferUserInput = interaction.fields.getTextInputValue('transfer_user_input');
+        try {
+          let targetUser;
+          const userIdMatch = transferUserInput.match(/<@!?(\d+)>/) || transferUserInput.match(/^(\d+)$/);
+          if (userIdMatch) {
+            targetUser = await interaction.guild.members.fetch(userIdMatch[1] || userIdMatch[0]);
+          } else {
+            return await interaction.reply({ content: '❌ Please provide a valid user ID or @mention.', ephemeral: true });
+          }
+          
+          if (!targetUser.voice.channel || targetUser.voice.channel.id !== voiceChannel.id) {
+            return await interaction.reply({ content: '❌ That user must be in your voice channel.', ephemeral: true });
+          }
+          
+          // Transfer ownership by giving full permissions to new owner
+          await voiceChannel.permissionOverwrites.edit(targetUser.user, {
+            ManageChannels: true,
+            Connect: true,
+            Speak: true,
+            MuteMembers: true,
+            DeafenMembers: true,
+            MoveMembers: true
+          });
+          
+          // Remove permissions from original owner
+          await voiceChannel.permissionOverwrites.edit(member.user, {
+            ManageChannels: null
+          });
+          
+          const embed = new EmbedBuilder()
+            .setColor('#F39C12')
+            .setTitle('👑 Ownership Transferred')
+            .setDescription(`**${targetUser.user.tag}** is now the owner of **${voiceChannel.name}**`)
+            .setTimestamp();
+          await interaction.reply({ embeds: [embed] });
+        } catch (error: any) {
+          await interaction.reply({ content: `❌ Failed to transfer ownership: ${error.message}`, ephemeral: true });
+        }
+        break;
+    }
+  }
+
+  // ============================================================================
+  // OWNER-ONLY SERVER MANAGEMENT COMMAND
+  // ============================================================================
+  
+  private createServerManagementCommand(): Command {
+    return {
+      data: new SlashCommandBuilder()
+        .setName('servers')
+        .setDescription('📊 Owner-only: Manage bot servers and connections')
+        .addSubcommand(sub =>
+          sub.setName('list')
+            .setDescription('List all servers the bot is in'))
+        .addSubcommand(sub =>
+          sub.setName('join')
+            .setDescription('Join a server via invite link')
+            .addStringOption(opt =>
+              opt.setName('invite')
+                .setDescription('Discord invite link or code')
+                .setRequired(true)))
+        .addSubcommand(sub =>
+          sub.setName('leave')
+            .setDescription('Leave a specific server')
+            .addStringOption(opt =>
+              opt.setName('serverid')
+                .setDescription('Server ID to leave')
+                .setRequired(true)))
+        .addSubcommand(sub =>
+          sub.setName('info')
+            .setDescription('Get detailed info about a server')
+            .addStringOption(opt =>
+              opt.setName('serverid')
+                .setDescription('Server ID to get info about')
+                .setRequired(true)))
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+      execute: async (interaction) => {
+        // Only bot owner can use this command
+        if (!this.isSuperAdmin(interaction.user.id)) {
+          return await interaction.reply({ 
+            content: '❌ This command is only available to the bot owner.', 
+            ephemeral: true 
+          });
+        }
+        
+        const subcommand = interaction.options.getSubcommand();
+        
+        switch (subcommand) {
+          case 'list':
+            await this.handleServerList(interaction);
+            break;
+          case 'join':
+            await this.handleServerJoin(interaction);
+            break;
+          case 'leave':
+            await this.handleServerLeave(interaction);
+            break;
+          case 'info':
+            await this.handleServerInfo(interaction);
+            break;
+        }
+      }
+    };
+  }
+  
+  private async handleServerList(interaction: any) {
+    try {
+      const guilds = this.client.guilds.cache;
+      
+      if (guilds.size === 0) {
+        return await interaction.reply({ 
+          content: '📊 Bot is not in any servers.', 
+          ephemeral: true 
+        });
+      }
+      
+      const serverList = guilds.map(guild => {
+        const memberCount = guild.memberCount || 'Unknown';
+        const owner = guild.ownerId ? `<@${guild.ownerId}>` : 'Unknown';
+        return `**${guild.name}** (${guild.id})\n• Members: ${memberCount}\n• Owner: ${owner}\n`;
+      }).join('\n');
+      
+      const embed = new EmbedBuilder()
+        .setColor('#5865F2')
+        .setTitle('📊 Bot Server List')
+        .setDescription(`Connected to **${guilds.size}** servers:\n\n${serverList}`)
+        .setFooter({ text: `Total servers: ${guilds.size} | Use /servers info <id> for details` })
+        .setTimestamp();
+        
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    } catch (error: any) {
+      await interaction.reply({ 
+        content: `❌ Error listing servers: ${error.message}`, 
+        ephemeral: true 
+      });
+    }
+  }
+  
+  private async handleServerJoin(interaction: any) {
+    const inviteInput = interaction.options.getString('invite');
+    
+    try {
+      // Extract invite code from URL or use as-is
+      const inviteCode = inviteInput.replace(/https?:\/\/(discord\.gg\/|discordapp\.com\/invite\/)/, '');
+      
+      // Fetch invite info first
+      const invite = await this.client.fetchInvite(inviteCode);
+      
+      if (!invite || !invite.guild) {
+        return await interaction.reply({ 
+          content: '❌ Invalid invite link or invite has expired.', 
+          ephemeral: true 
+        });
+      }
+      
+      // Check if bot is already in this server
+      if (this.client.guilds.cache.has(invite.guild.id)) {
+        return await interaction.reply({ 
+          content: `❌ Bot is already in **${invite.guild.name}**.`, 
+          ephemeral: true 
+        });
+      }
+      
+      const embed = new EmbedBuilder()
+        .setColor('#57F287')
+        .setTitle('🗗️ Invite Information')
+        .setDescription(`**Server:** ${invite.guild.name}\n**Members:** ${invite.memberCount || 'Unknown'}\n**Invite Code:** \`${inviteCode}\``)
+        .addFields(
+          { name: 'Action Required', value: 'To join this server, the bot needs to be manually invited by a server administrator with the proper permissions.', inline: false },
+          { name: 'Invite Link', value: `https://discord.com/api/oauth2/authorize?client_id=${this.client.user?.id}&permissions=8&scope=bot%20applications.commands&guild_id=${invite.guild.id}`, inline: false }
+        )
+        .setThumbnail(invite.guild.iconURL())
+        .setFooter({ text: 'Share the invite link with a server admin to add the bot' })
+        .setTimestamp();
+        
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    } catch (error: any) {
+      await interaction.reply({ 
+        content: `❌ Error processing invite: ${error.message}`, 
+        ephemeral: true 
+      });
+    }
+  }
+  
+  private async handleServerLeave(interaction: any) {
+    const serverId = interaction.options.getString('serverid');
+    
+    try {
+      const guild = this.client.guilds.cache.get(serverId);
+      
+      if (!guild) {
+        return await interaction.reply({ 
+          content: '❌ Server not found. Bot is not in a server with that ID.', 
+          ephemeral: true 
+        });
+      }
+      
+      const serverName = guild.name;
+      const memberCount = guild.memberCount;
+      
+      await guild.leave();
+      
+      const embed = new EmbedBuilder()
+        .setColor('#E74C3C')
+        .setTitle('📝 Left Server')
+        .setDescription(`Successfully left **${serverName}**`)
+        .addFields(
+          { name: 'Server ID', value: serverId, inline: true },
+          { name: 'Members', value: memberCount?.toString() || 'Unknown', inline: true }
+        )
+        .setTimestamp();
+        
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    } catch (error: any) {
+      await interaction.reply({ 
+        content: `❌ Error leaving server: ${error.message}`, 
+        ephemeral: true 
+      });
+    }
+  }
+  
+  private async handleServerInfo(interaction: any) {
+    const serverId = interaction.options.getString('serverid');
+    
+    try {
+      const guild = this.client.guilds.cache.get(serverId);
+      
+      if (!guild) {
+        return await interaction.reply({ 
+          content: '❌ Server not found. Bot is not in a server with that ID.', 
+          ephemeral: true 
+        });
+      }
+      
+      const owner = await guild.fetchOwner().catch(() => null);
+      const channels = guild.channels.cache;
+      const roles = guild.roles.cache;
+      const textChannels = channels.filter(ch => ch.type === ChannelType.GuildText).size;
+      const voiceChannels = channels.filter(ch => ch.type === ChannelType.GuildVoice).size;
+      
+      const embed = new EmbedBuilder()
+        .setColor('#5865F2')
+        .setTitle(`📊 Server Information: ${guild.name}`)
+        .setThumbnail(guild.iconURL() || '')
+        .addFields(
+          { name: 'Server ID', value: guild.id, inline: true },
+          { name: 'Owner', value: owner ? `${owner.user.tag}\n(${owner.id})` : 'Unknown', inline: true },
+          { name: 'Created', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:R>`, inline: true },
+          { name: 'Members', value: guild.memberCount?.toString() || 'Unknown', inline: true },
+          { name: 'Channels', value: `💬 ${textChannels} 🔊 ${voiceChannels}`, inline: true },
+          { name: 'Roles', value: roles.size.toString(), inline: true },
+          { name: 'Verification Level', value: guild.verificationLevel.toString(), inline: true },
+          { name: 'Boost Level', value: `Tier ${guild.premiumTier} (${guild.premiumSubscriptionCount || 0} boosts)`, inline: true },
+          { name: 'Features', value: guild.features.length > 0 ? guild.features.join(', ') : 'None', inline: false }
+        )
+        .setFooter({ text: `Joined this server on` })
+        .setTimestamp(guild.joinedTimestamp);
+        
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    } catch (error: any) {
+      await interaction.reply({ 
+        content: `❌ Error getting server info: ${error.message}`, 
+        ephemeral: true 
+      });
     }
   }
 
