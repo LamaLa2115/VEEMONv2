@@ -381,6 +381,213 @@ export default function BotCommands() {
     }
   ];
 
+  const additionalCommands = [
+    {
+      icon: <Zap className="w-5 h-5" />,
+      title: "Meme",
+      description: "Get a random meme from Reddit",
+      category: "Fun",
+      onExecute: () => executeCommand('meme')
+    },
+    {
+      icon: <Dice6 className="w-5 h-5" />,
+      title: "Roll Dice",
+      description: "Roll dice with custom sides",
+      category: "Games",
+      requiresInput: true,
+      inputs: [{ name: "sides", placeholder: "Number of sides (default: 6)", required: false }],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('roll', inputs)
+    },
+    {
+      icon: <Search className="w-5 h-5" />,
+      title: "Wikipedia",
+      description: "Search Wikipedia articles",
+      category: "Utility",
+      requiresInput: true,
+      inputs: [{ name: "query", placeholder: "Search term", required: true }],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('wiki', inputs)
+    },
+    {
+      icon: <Coffee className="w-5 h-5" />,
+      title: "Quote",
+      description: "Get an inspirational quote",
+      category: "Fun",
+      onExecute: () => executeCommand('quote')
+    },
+    {
+      icon: <Brain className="w-5 h-5" />,
+      title: "Joke",
+      description: "Get a random joke",
+      category: "Fun",
+      onExecute: () => executeCommand('joke')
+    },
+    {
+      icon: <Dice6 className="w-5 h-5" />,
+      title: "Coin Flip",
+      description: "Flip a coin",
+      category: "Games",
+      onExecute: () => executeCommand('coinflip')
+    },
+    {
+      icon: <User className="w-5 h-5" />,
+      title: "Avatar",
+      description: "Get user's avatar",
+      category: "Utility",
+      requiresInput: true,
+      inputs: [{ name: "user", placeholder: "@username (optional)", required: false }],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('avatar', inputs)
+    },
+    {
+      icon: <Cloud className="w-5 h-5" />,
+      title: "Random Fact",
+      description: "Get a random interesting fact",
+      category: "Fun",
+      onExecute: () => executeCommand('fact')
+    },
+    {
+      icon: <Search className="w-5 h-5" />,
+      title: "Color Info",
+      description: "Get information about a color",
+      category: "Utility",
+      requiresInput: true,
+      inputs: [{ name: "color", placeholder: "Color name or hex code", required: true }],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('color', inputs)
+    },
+    {
+      icon: <Zap className="w-5 h-5" />,
+      title: "QR Code",
+      description: "Generate a QR code",
+      category: "Utility",
+      requiresInput: true,
+      inputs: [{ name: "text", placeholder: "Text to encode", required: true }],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('qr', inputs)
+    },
+    {
+      icon: <Brain className="w-5 h-5" />,
+      title: "Math",
+      description: "Solve math expressions",
+      category: "Utility",
+      requiresInput: true,
+      inputs: [{ name: "expression", placeholder: "Math expression (e.g., 2+2)", required: true }],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('math', inputs)
+    },
+    {
+      icon: <Coffee className="w-5 h-5" />,
+      title: "Dad Joke",
+      description: "Get a dad joke",
+      category: "Fun",
+      onExecute: () => executeCommand('dadjoke')
+    },
+    {
+      icon: <User className="w-5 h-5" />,
+      title: "AFK Status",
+      description: "Set away-from-keyboard status",
+      category: "Utility",
+      requiresInput: true,
+      inputs: [{ name: "reason", placeholder: "AFK reason (optional)", required: false }],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('afk', inputs)
+    },
+    {
+      icon: <Cloud className="w-5 h-5" />,
+      title: "Cat Fact",
+      description: "Get a random cat fact",
+      category: "Fun",
+      onExecute: () => executeCommand('catfact')
+    },
+    {
+      icon: <Dice6 className="w-5 h-5" />,
+      title: "Number Trivia",
+      description: "Get trivia about a number",
+      category: "Fun",
+      requiresInput: true,
+      inputs: [{ name: "number", placeholder: "Number (optional, random if empty)", required: false }],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('numbertrivia', inputs)
+    },
+    {
+      icon: <Search className="w-5 h-5" />,
+      title: "Shorten URL",
+      description: "Shorten a long URL",
+      category: "Utility",
+      requiresInput: true,
+      inputs: [{ name: "url", placeholder: "URL to shorten", required: true }],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('shorten', inputs)
+    },
+    {
+      icon: <Brain className="w-5 h-5" />,
+      title: "Password Generate",
+      description: "Generate a secure password",
+      category: "Utility",
+      requiresInput: true,
+      inputs: [
+        { name: "length", placeholder: "Password length (default: 12)", required: false },
+        { name: "symbols", placeholder: "Include symbols (true/false)", required: false }
+      ],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('password', inputs)
+    },
+    {
+      icon: <Coffee className="w-5 h-5" />,
+      title: "Chuck Norris",
+      description: "Get a Chuck Norris joke",
+      category: "Fun",
+      onExecute: () => executeCommand('chuck')
+    },
+    {
+      icon: <User className="w-5 h-5" />,
+      title: "Hug",
+      description: "Hug someone",
+      category: "Social",
+      requiresInput: true,
+      inputs: [{ name: "user", placeholder: "@username to hug", required: true }],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('hug', inputs)
+    },
+    {
+      icon: <Dice6 className="w-5 h-5" />,
+      title: "Rock Paper Scissors",
+      description: "Play rock paper scissors",
+      category: "Games",
+      requiresInput: true,
+      inputs: [{ name: "choice", placeholder: "rock, paper, or scissors", required: true }],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('rps', inputs)
+    },
+    {
+      icon: <Cloud className="w-5 h-5" />,
+      title: "Space Info",
+      description: "Get space facts and NASA info",
+      category: "Education",
+      onExecute: () => executeCommand('space')
+    },
+    {
+      icon: <Search className="w-5 h-5" />,
+      title: "Define",
+      description: "Get dictionary definition",
+      category: "Education",
+      requiresInput: true,
+      inputs: [{ name: "word", placeholder: "Word to define", required: true }],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('define', inputs)
+    },
+    {
+      icon: <Brain className="w-5 h-5" />,
+      title: "ASCII Art",
+      description: "Convert text to ASCII art",
+      category: "Fun",
+      requiresInput: true,
+      inputs: [{ name: "text", placeholder: "Text to convert", required: true }],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('ascii', inputs)
+    },
+    {
+      icon: <Zap className="w-5 h-5" />,
+      title: "Remind Me",
+      description: "Set a reminder",
+      category: "Utility",
+      requiresInput: true,
+      inputs: [
+        { name: "time", placeholder: "Time (e.g., 5m, 1h)", required: true },
+        { name: "message", placeholder: "Reminder message", required: true }
+      ],
+      onExecute: (inputs?: Record<string, string>) => executeCommand('remind', inputs)
+    }
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -394,13 +601,15 @@ export default function BotCommands() {
         </div>
 
         <Tabs defaultValue="music" className="w-full">
-          <TabsList className="grid w-full grid-cols-6 lg:grid-cols-6" data-testid="command-tabs">
+          <TabsList className="grid w-full grid-cols-8 lg:grid-cols-8" data-testid="command-tabs">
             <TabsTrigger value="music" data-testid="tab-music">Music</TabsTrigger>
             <TabsTrigger value="moderation" data-testid="tab-moderation">Moderation</TabsTrigger>
             <TabsTrigger value="roles" data-testid="tab-roles">Roles</TabsTrigger>
             <TabsTrigger value="fun" data-testid="tab-fun">Fun & Games</TabsTrigger>
             <TabsTrigger value="utility" data-testid="tab-utility">Utility</TabsTrigger>
             <TabsTrigger value="ai" data-testid="tab-ai">AI</TabsTrigger>
+            <TabsTrigger value="social" data-testid="tab-social">Social</TabsTrigger>
+            <TabsTrigger value="additional" data-testid="tab-additional">More</TabsTrigger>
           </TabsList>
 
           <TabsContent value="music" className="space-y-4">
@@ -446,6 +655,22 @@ export default function BotCommands() {
           <TabsContent value="ai" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {aiCommands.map((cmd, index) => (
+                <CommandButton key={index} {...cmd} />
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="social" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {additionalCommands.filter(cmd => cmd.category === 'Social').map((cmd, index) => (
+                <CommandButton key={index} {...cmd} />
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="additional" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {additionalCommands.filter(cmd => ['Games', 'Education', 'Fun'].includes(cmd.category)).map((cmd, index) => (
                 <CommandButton key={index} {...cmd} />
               ))}
             </div>
