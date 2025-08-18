@@ -955,7 +955,7 @@ export class EnhancedDiscordBot {
         const reason = interaction.options.getString('reason') || 'AFK';
         
         try {
-          await storage.createAfkUser({
+          await storage.setAfkUser({
             userId: interaction.user.id,
             username: interaction.user.username,
             reason: reason,
@@ -1015,8 +1015,9 @@ export class EnhancedDiscordBot {
           await interaction.editReply({ 
             content: `🗑️ Cleared ${messagesToDelete.length} messages${targetUser ? ` from ${targetUser.tag}` : ''}.` 
           });
-        } catch (error) {
-          await interaction.editReply({ content: `❌ Failed to clear messages: ${error.message}` });
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await interaction.editReply({ content: `❌ Failed to clear messages: ${errorMessage}` });
         }
       }
     };
@@ -1067,8 +1068,9 @@ export class EnhancedDiscordBot {
             .setTimestamp();
 
           await interaction.reply({ embeds: [embed] });
-        } catch (error) {
-          await interaction.reply({ content: `❌ Failed to timeout user: ${error.message}`, ephemeral: true });
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await interaction.reply({ content: `❌ Failed to timeout user: ${errorMessage}`, ephemeral: true });
         }
       }
     };
@@ -1096,7 +1098,7 @@ export class EnhancedDiscordBot {
         const reason = interaction.options.getString('reason');
         
         try {
-          await storage.createUserWarning({
+          await storage.createWarning({
             serverId: interaction.guildId!,
             userId: user.id,
             username: user.username,
@@ -1120,8 +1122,9 @@ export class EnhancedDiscordBot {
           } catch {
             // User has DMs disabled
           }
-        } catch (error) {
-          await interaction.reply({ content: `❌ Failed to warn user: ${error.message}`, ephemeral: true });
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await interaction.reply({ content: `❌ Failed to warn user: ${errorMessage}`, ephemeral: true });
         }
       }
     };
