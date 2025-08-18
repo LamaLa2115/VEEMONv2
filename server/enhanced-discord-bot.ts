@@ -759,7 +759,7 @@ export class EnhancedDiscordBot {
           }
           
           const embed = new EmbedBuilder()
-            .setColor(color)
+            .setColor(color as any)
             .setTitle('🎰 Blackjack - Natural!')
             .addFields(
               { name: 'Your cards', value: playerCards.join(' ') + ` (${playerValue})`, inline: false },
@@ -1385,7 +1385,8 @@ export class EnhancedDiscordBot {
       }
 
       // Get audio stream
-      const stream = await play.stream(songInfo.url);
+      const songUrl = (songInfo as any).url || (songInfo as any).video_details?.url || query;
+      const stream = await play.stream(songUrl);
       const resource = createAudioResource(stream.stream, { 
         inputType: stream.type,
       });
@@ -1396,8 +1397,8 @@ export class EnhancedDiscordBot {
       player.play(resource);
       
       const musicQueue: MusicQueue = {
-        title: (songInfo as any).title || 'Unknown Title',
-        url: songInfo.url,
+        title: (songInfo as any).title || (songInfo as any).video_details?.title || 'Unknown Title',
+        url: songUrl,
         duration: (songInfo as any).durationInSec ? this.formatDuration((songInfo as any).durationInSec) : 'Unknown',
         requestedBy: interaction.user.tag
       };
@@ -2196,7 +2197,7 @@ export class EnhancedDiscordBot {
       const member = await interaction.guild.members.fetch(user.id);
       
       // Store current roles (in a real implementation, store in database)
-      const currentRoles = member.roles.cache.filter(role => role.id !== interaction.guild.id).map(role => role.id);
+      const currentRoles = member.roles.cache.filter((role: any) => role.id !== interaction.guild.id).map((role: any) => role.id);
       
       // Remove all roles except @everyone
       await member.roles.set([]);
@@ -2609,7 +2610,12 @@ export class EnhancedDiscordBot {
         .setDescription(`Set **${role.name}** permissions to **${preset.charAt(0).toUpperCase() + preset.slice(1)}** preset`)
         .addFields({
           name: 'Permissions Added',
-          value: permissions.map(perm => PermissionFlagsBits[perm as any] || perm.toString()).join('\n') || 'None'
+          value: permissions.map((perm: any) => {
+            for (const [key, value] of Object.entries(PermissionFlagsBits)) {
+              if (value === perm) return key;
+            }
+            return perm.toString();
+          }).join('\n') || 'None'
         })
         .setTimestamp();
       
@@ -2981,6 +2987,175 @@ export class EnhancedDiscordBot {
     };
   }
 
+  private createNumberTriviaCommand(): Command {
+    return {
+      data: new SlashCommandBuilder()
+        .setName('numbertrivia')
+        .setDescription('Get trivia about a number')
+        .addIntegerOption(opt => 
+          opt.setName('number').setDescription('Number for trivia').setRequired(false)),
+      execute: async (interaction: any) => {
+        const number = interaction.options.getInteger('number') || Math.floor(Math.random() * 100);
+        
+        const triviaFacts = [
+          `${number} is a fascinating number with many mathematical properties!`,
+          `Did you know? ${number} has unique characteristics in number theory.`,
+          `Fun fact: ${number} appears in various mathematical sequences.`,
+          `${number} has interesting divisibility properties.`
+        ];
+        
+        const randomTrivia = triviaFacts[Math.floor(Math.random() * triviaFacts.length)];
+        
+        const embed = new EmbedBuilder()
+          .setColor('#9B59B6')
+          .setTitle('🔢 Number Trivia')
+          .setDescription(`**Number:** ${number}\n\n${randomTrivia}`)
+          .setTimestamp();
+        
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+  }
+
+  private createShortenCommand(): Command {
+    return {
+      data: new SlashCommandBuilder()
+        .setName('shorten')
+        .setDescription('Shorten a URL')
+        .addStringOption(opt => 
+          opt.setName('url').setDescription('URL to shorten').setRequired(true)),
+      execute: async (interaction: any) => {
+        const url = interaction.options.getString('url');
+        
+        const embed = new EmbedBuilder()
+          .setColor('#3498DB')
+          .setTitle('🔗 URL Shortener')
+          .setDescription(`**Original URL:** ${url}\n\nURL shortening service integration coming soon!`)
+          .setTimestamp();
+        
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+  }
+
+  private createChuckCommand(): Command {
+    return {
+      data: new SlashCommandBuilder()
+        .setName('chuck')
+        .setDescription('Get a Chuck Norris fact'),
+      execute: async (interaction: any) => {
+        const chuckFacts = [
+          "Chuck Norris doesn't need a debugger, he just stares down the bug until the code confesses.",
+          "Chuck Norris can compile syntax errors.",
+          "Chuck Norris can access the database... with his fists.",
+          "Chuck Norris can write infinite loops that finish."
+        ];
+        
+        const randomFact = chuckFacts[Math.floor(Math.random() * chuckFacts.length)];
+        
+        const embed = new EmbedBuilder()
+          .setColor('#E67E22')
+          .setTitle('💪 Chuck Norris Fact')
+          .setDescription(randomFact)
+          .setTimestamp();
+        
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+  }
+
+  private createSpaceCommand(): Command {
+    return {
+      data: new SlashCommandBuilder()
+        .setName('space')
+        .setDescription('Get space facts and information'),
+      execute: async (interaction: any) => {
+        const spaceFacts = [
+          "There are more possible games of chess than there are atoms in the observable universe!",
+          "A single day on Venus lasts longer than its year!",
+          "Saturn's moon Titan has lakes of liquid methane!",
+          "Neutron stars are so dense that a teaspoon would weigh 6 billion tons!"
+        ];
+        
+        const randomFact = spaceFacts[Math.floor(Math.random() * spaceFacts.length)];
+        
+        const embed = new EmbedBuilder()
+          .setColor('#1F4E79')
+          .setTitle('🚀 Space Fact')
+          .setDescription(randomFact)
+          .setTimestamp();
+        
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+  }
+
+  private createDefineCommand(): Command {
+    return {
+      data: new SlashCommandBuilder()
+        .setName('define')
+        .setDescription('Define a word')
+        .addStringOption(opt => 
+          opt.setName('word').setDescription('Word to define').setRequired(true)),
+      execute: async (interaction: any) => {
+        const word = interaction.options.getString('word');
+        
+        const embed = new EmbedBuilder()
+          .setColor('#8E44AD')
+          .setTitle('📖 Dictionary')
+          .setDescription(`**Word:** ${word}\n\nDictionary API integration coming soon!`)
+          .setTimestamp();
+        
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+  }
+
+  private createASCIICommand(): Command {
+    return {
+      data: new SlashCommandBuilder()
+        .setName('ascii')
+        .setDescription('Convert text to ASCII art')
+        .addStringOption(opt => 
+          opt.setName('text').setDescription('Text to convert').setRequired(true)),
+      execute: async (interaction: any) => {
+        const text = interaction.options.getString('text');
+        
+        const embed = new EmbedBuilder()
+          .setColor('#2C3E50')
+          .setTitle('🎨 ASCII Art')
+          .setDescription(`**Text:** ${text}\n\n\`\`\`\nASCII art generation coming soon!\n\`\`\``)
+          .setTimestamp();
+        
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+  }
+
+  private createRemindCommand(): Command {
+    return {
+      data: new SlashCommandBuilder()
+        .setName('remind')
+        .setDescription('Set a reminder')
+        .addStringOption(opt => 
+          opt.setName('message').setDescription('Reminder message').setRequired(true))
+        .addStringOption(opt => 
+          opt.setName('time').setDescription('Time (e.g., 5m, 1h, 1d)').setRequired(true)),
+      execute: async (interaction: any) => {
+        const message = interaction.options.getString('message');
+        const time = interaction.options.getString('time');
+        
+        const embed = new EmbedBuilder()
+          .setColor('#F39C12')
+          .setTitle('⏰ Reminder Set')
+          .setDescription(`**Message:** ${message}\n**Time:** ${time}\n\nReminder system coming soon!`)
+          .setTimestamp();
+        
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+  }
+
   // EVENT LISTENERS
   // ============================================================================
   
@@ -3136,9 +3311,10 @@ export class EnhancedDiscordBot {
   }
   
   private async registerCommands() {
+    const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
+    const commandData = Array.from(this.commands.values()).map(command => command.data.toJSON());
+    
     try {
-      const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
-      const commandData = Array.from(this.commands.values()).map(command => command.data.toJSON());
       
       console.log(`🔄 Registering ${commandData.length} slash commands globally...`);
       
@@ -3154,7 +3330,7 @@ export class EnhancedDiscordBot {
       const data = await rest.put(
             Routes.applicationCommands(clientId),
             { body: commandData },
-        );
+        ) as any[];
       
       console.log(`✅ Successfully registered ${data.length} slash commands!`);
       console.log('📝 Commands registered:', commandData.map(cmd => cmd.name).join(', '));
@@ -3164,9 +3340,11 @@ export class EnhancedDiscordBot {
       // Try guild-specific registration as fallback
       try {
         console.log('🔄 Attempting guild-specific registration as fallback...');
-        for (const guild of this.client.guilds.cache.values()) {
+        const guildsArray = Array.from(this.client.guilds.cache.values());
+        for (const guild of guildsArray) {
           const clientId = this.client.user!.id;
-          await rest.put(
+          const restInstance = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
+          await restInstance.put(
             Routes.applicationGuildCommands(clientId, guild.id),
             { body: commandData }
           );
@@ -3263,7 +3441,7 @@ export class EnhancedDiscordBot {
       }
       
       const embed = new EmbedBuilder()
-        .setColor(color)
+        .setColor(color as any)
         .setTitle('🎰 Blackjack - Game Over')
         .addFields(
           { name: 'Your cards', value: game.playerCards.join(' ') + ` (${playerValue})`, inline: false },
