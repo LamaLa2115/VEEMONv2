@@ -1130,10 +1130,393 @@ class DiscordBot {
     const roleCommand: Command = {
       data: new SlashCommandBuilder()
         .setName('role')
-        .setDescription('Role management (coming soon)')
+        .setDescription('Comprehensive role management')
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('list')
+            .setDescription('List all roles in the server'))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('add')
+            .setDescription('Add a role to a member')
+            .addUserOption((option: any) =>
+              option.setName('member')
+                .setDescription('Member to add role to')
+                .setRequired(true))
+            .addRoleOption((option: any) =>
+              option.setName('role')
+                .setDescription('Role to add')
+                .setRequired(true)))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('remove')
+            .setDescription('Remove a role from a member')
+            .addUserOption((option: any) =>
+              option.setName('member')
+                .setDescription('Member to remove role from')
+                .setRequired(true))
+            .addRoleOption((option: any) =>
+              option.setName('role')
+                .setDescription('Role to remove')
+                .setRequired(true)))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('create')
+            .setDescription('Create a new role')
+            .addStringOption((option: any) =>
+              option.setName('name')
+                .setDescription('Role name')
+                .setRequired(true))
+            .addStringOption((option: any) =>
+              option.setName('color')
+                .setDescription('Role color (hex code like #ff0000)'))
+            .addBooleanOption((option: any) =>
+              option.setName('mentionable')
+                .setDescription('Whether the role can be mentioned'))
+            .addBooleanOption((option: any) =>
+              option.setName('hoist')
+                .setDescription('Whether the role should be displayed separately')))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('delete')
+            .setDescription('Delete a role')
+            .addRoleOption((option: any) =>
+              option.setName('role')
+                .setDescription('Role to delete')
+                .setRequired(true)))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('preset')
+            .setDescription('Create role with permission preset')
+            .addStringOption((option: any) =>
+              option.setName('name')
+                .setDescription('Role name')
+                .setRequired(true))
+            .addStringOption((option: any) =>
+              option.setName('preset')
+                .setDescription('Permission preset')
+                .setRequired(true)
+                .addChoices(
+                  { name: 'Moderator', value: 'moderator' },
+                  { name: 'Helper', value: 'helper' },
+                  { name: 'VIP', value: 'vip' },
+                  { name: 'DJ', value: 'dj' },
+                  { name: 'Event Manager', value: 'event' }
+                ))
+            .addStringOption((option: any) =>
+              option.setName('color')
+                .setDescription('Role color (hex code like #ff0000)')))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('info')
+            .setDescription('Get detailed information about a role')
+            .addRoleOption((option: any) =>
+              option.setName('role')
+                .setDescription('Role to get info about')
+                .setRequired(true)))
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
       execute: async (interaction) => {
-        await interaction.reply({ content: 'Role management is not implemented yet.', flags: 64 });
+        // Check permissions with super admin bypass
+        if (!this.hasPermission(interaction, PermissionFlagsBits.ManageRoles)) {
+          return await interaction.reply({ content: '❌ You don\'t have permission to manage roles.', flags: 64 });
+        }
+
+        const subcommand = interaction.options.getSubcommand();
+
+        switch (subcommand) {
+          case 'list':
+            const roles = interaction.guild!.roles.cache
+              .filter((role: any) => role.name !== '@everyone')
+              .sort((a: any, b: any) => b.position - a.position)
+              .map((role: any, index: number) => `**${index + 1}.** ${role} (${role.members.size} members)`)
+              .slice(0, 25); // Discord embed field limit
+
+            if (roles.length === 0) {
+              await interaction.reply({ content: 'No roles found in this server.', flags: 64 });
+              return;
+            }
+
+            const listEmbed = new EmbedBuilder()
+              .setColor('#5865F2')
+              .setTitle('🏷️ Server Roles')
+              .setDescription(roles.join('\n'))
+              .setFooter({ text: `Total: ${interaction.guild!.roles.cache.size - 1} roles (excluding @everyone)` })
+              .setTimestamp();
+
+            await interaction.reply({ embeds: [listEmbed] });
+            break;
+
+          case 'add':
+            const addMember = interaction.options.getMember('member') as GuildMember;
+            const addRole = interaction.options.getRole('role') as Role;
+
+            if (!addMember) {
+              await interaction.reply({ content: '❌ Member not found in this server.', flags: 64 });
+              return;
+            }
+
+            // Check role hierarchy
+            if (addRole.position >= interaction.member!.roles.highest.position && !this.isSuperAdmin(interaction.user.id)) {
+              await interaction.reply({ content: '❌ You cannot assign roles higher than or equal to your highest role.', flags: 64 });
+              return;
+            }
+
+            if (addMember.roles.cache.has(addRole.id)) {
+              await interaction.reply({ content: `❌ ${addMember.user.username} already has the ${addRole.name} role.`, flags: 64 });
+              return;
+            }
+
+            try {
+              await addMember.roles.add(addRole);
+              
+              const addEmbed = new EmbedBuilder()
+                .setColor('#57F287')
+                .setTitle('✅ Role Added')
+                .setDescription(`Added ${addRole} role to ${addMember.user.username}`)
+                .setTimestamp();
+
+              await interaction.reply({ embeds: [addEmbed] });
+              
+              // Log the action
+              await storage.createModerationLog({
+                serverId: interaction.guild!.id,
+                action: 'role_add',
+                targetUserId: addMember.user.id,
+                targetUsername: addMember.user.username,
+                moderatorId: interaction.user.id,
+                moderatorUsername: interaction.user.username,
+                reason: `Added role: ${addRole.name}`,
+              });
+              
+            } catch (error) {
+              await interaction.reply({ content: '❌ Failed to add role. Check bot permissions.', flags: 64 });
+            }
+            break;
+
+          case 'remove':
+            const removeMember = interaction.options.getMember('member') as GuildMember;
+            const removeRole = interaction.options.getRole('role') as Role;
+
+            if (!removeMember) {
+              await interaction.reply({ content: '❌ Member not found in this server.', flags: 64 });
+              return;
+            }
+
+            // Check role hierarchy
+            if (removeRole.position >= interaction.member!.roles.highest.position && !this.isSuperAdmin(interaction.user.id)) {
+              await interaction.reply({ content: '❌ You cannot remove roles higher than or equal to your highest role.', flags: 64 });
+              return;
+            }
+
+            if (!removeMember.roles.cache.has(removeRole.id)) {
+              await interaction.reply({ content: `❌ ${removeMember.user.username} doesn't have the ${removeRole.name} role.`, flags: 64 });
+              return;
+            }
+
+            try {
+              await removeMember.roles.remove(removeRole);
+              
+              const removeEmbed = new EmbedBuilder()
+                .setColor('#FEE75C')
+                .setTitle('✅ Role Removed')
+                .setDescription(`Removed ${removeRole} role from ${removeMember.user.username}`)
+                .setTimestamp();
+
+              await interaction.reply({ embeds: [removeEmbed] });
+              
+              // Log the action
+              await storage.createModerationLog({
+                serverId: interaction.guild!.id,
+                action: 'role_remove',
+                targetUserId: removeMember.user.id,
+                targetUsername: removeMember.user.username,
+                moderatorId: interaction.user.id,
+                moderatorUsername: interaction.user.username,
+                reason: `Removed role: ${removeRole.name}`,
+              });
+              
+            } catch (error) {
+              await interaction.reply({ content: '❌ Failed to remove role. Check bot permissions.', flags: 64 });
+            }
+            break;
+
+          case 'create':
+            const createName = interaction.options.getString('name')!;
+            const createColor = interaction.options.getString('color');
+            const mentionable = interaction.options.getBoolean('mentionable') ?? false;
+            const hoist = interaction.options.getBoolean('hoist') ?? false;
+
+            try {
+              const newRole = await interaction.guild!.roles.create({
+                name: createName,
+                color: createColor || undefined,
+                mentionable,
+                hoist,
+                reason: `Role created by ${interaction.user.username}`,
+              });
+
+              const createEmbed = new EmbedBuilder()
+                .setColor(newRole.color || '#5865F2')
+                .setTitle('✅ Role Created')
+                .setDescription(`Created role ${newRole}`)
+                .addFields(
+                  { name: 'Color', value: createColor || 'Default', inline: true },
+                  { name: 'Mentionable', value: mentionable ? 'Yes' : 'No', inline: true },
+                  { name: 'Hoisted', value: hoist ? 'Yes' : 'No', inline: true }
+                )
+                .setTimestamp();
+
+              await interaction.reply({ embeds: [createEmbed] });
+              
+            } catch (error) {
+              await interaction.reply({ content: '❌ Failed to create role. Check bot permissions.', flags: 64 });
+            }
+            break;
+
+          case 'delete':
+            const deleteRole = interaction.options.getRole('role') as Role;
+
+            // Check role hierarchy
+            if (deleteRole.position >= interaction.member!.roles.highest.position && !this.isSuperAdmin(interaction.user.id)) {
+              await interaction.reply({ content: '❌ You cannot delete roles higher than or equal to your highest role.', flags: 64 });
+              return;
+            }
+
+            try {
+              const roleName = deleteRole.name;
+              await deleteRole.delete(`Deleted by ${interaction.user.username}`);
+
+              const deleteEmbed = new EmbedBuilder()
+                .setColor('#ED4245')
+                .setTitle('✅ Role Deleted')
+                .setDescription(`Deleted role **${roleName}**`)
+                .setTimestamp();
+
+              await interaction.reply({ embeds: [deleteEmbed] });
+              
+            } catch (error) {
+              await interaction.reply({ content: '❌ Failed to delete role. Check bot permissions.', flags: 64 });
+            }
+            break;
+
+          case 'preset':
+            const presetName = interaction.options.getString('name')!;
+            const preset = interaction.options.getString('preset')!;
+            const presetColor = interaction.options.getString('color');
+
+            const presets = {
+              moderator: {
+                permissions: [
+                  PermissionFlagsBits.KickMembers,
+                  PermissionFlagsBits.BanMembers,
+                  PermissionFlagsBits.ManageMessages,
+                  PermissionFlagsBits.ModerateMembers,
+                  PermissionFlagsBits.ViewAuditLog,
+                  PermissionFlagsBits.ManageNicknames
+                ],
+                defaultColor: '#E74C3C',
+                description: 'Full moderation permissions'
+              },
+              helper: {
+                permissions: [
+                  PermissionFlagsBits.ManageMessages,
+                  PermissionFlagsBits.ModerateMembers,
+                  PermissionFlagsBits.ManageNicknames
+                ],
+                defaultColor: '#3498DB',
+                description: 'Basic helper permissions'
+              },
+              vip: {
+                permissions: [
+                  PermissionFlagsBits.UseExternalEmojis,
+                  PermissionFlagsBits.UseExternalStickers,
+                  PermissionFlagsBits.EmbedLinks
+                ],
+                defaultColor: '#F1C40F',
+                description: 'VIP user privileges'
+              },
+              dj: {
+                permissions: [
+                  PermissionFlagsBits.Connect,
+                  PermissionFlagsBits.Speak,
+                  PermissionFlagsBits.UseVAD,
+                  PermissionFlagsBits.PrioritySpeaker
+                ],
+                defaultColor: '#9B59B6',
+                description: 'Music and voice permissions'
+              },
+              event: {
+                permissions: [
+                  PermissionFlagsBits.ManageEvents,
+                  PermissionFlagsBits.CreatePublicThreads,
+                  PermissionFlagsBits.CreatePrivateThreads,
+                  PermissionFlagsBits.ManageThreads
+                ],
+                defaultColor: '#E67E22',
+                description: 'Event management permissions'
+              }
+            };
+
+            const selectedPreset = presets[preset as keyof typeof presets];
+            
+            try {
+              const presetRole = await interaction.guild!.roles.create({
+                name: presetName,
+                color: presetColor || selectedPreset.defaultColor,
+                permissions: selectedPreset.permissions,
+                mentionable: true,
+                reason: `${preset} role created by ${interaction.user.username}`,
+              });
+
+              const presetEmbed = new EmbedBuilder()
+                .setColor(presetRole.color || '#5865F2')
+                .setTitle('✅ Preset Role Created')
+                .setDescription(`Created ${preset} role ${presetRole}`)
+                .addFields(
+                  { name: 'Preset Type', value: preset.charAt(0).toUpperCase() + preset.slice(1), inline: true },
+                  { name: 'Description', value: selectedPreset.description, inline: true },
+                  { name: 'Permissions', value: `${selectedPreset.permissions.length} permissions assigned`, inline: true }
+                )
+                .setTimestamp();
+
+              await interaction.reply({ embeds: [presetEmbed] });
+              
+            } catch (error) {
+              await interaction.reply({ content: '❌ Failed to create preset role. Check bot permissions.', flags: 64 });
+            }
+            break;
+
+          case 'info':
+            const infoRole = interaction.options.getRole('role') as Role;
+            
+            const permissions = infoRole.permissions.toArray();
+            const permissionList = permissions.length > 0 
+              ? permissions.slice(0, 10).join(', ') + (permissions.length > 10 ? `... (+${permissions.length - 10} more)` : '')
+              : 'No special permissions';
+
+            const infoEmbed = new EmbedBuilder()
+              .setColor(infoRole.color || '#5865F2')
+              .setTitle(`🏷️ Role Information: ${infoRole.name}`)
+              .addFields(
+                { name: 'ID', value: infoRole.id, inline: true },
+                { name: 'Color', value: infoRole.hexColor, inline: true },
+                { name: 'Position', value: infoRole.position.toString(), inline: true },
+                { name: 'Members', value: infoRole.members.size.toString(), inline: true },
+                { name: 'Mentionable', value: infoRole.mentionable ? 'Yes' : 'No', inline: true },
+                { name: 'Hoisted', value: infoRole.hoist ? 'Yes' : 'No', inline: true },
+                { name: 'Created', value: `<t:${Math.floor(infoRole.createdTimestamp / 1000)}:F>`, inline: false },
+                { name: 'Permissions', value: permissionList, inline: false }
+              )
+              .setTimestamp();
+
+            await interaction.reply({ embeds: [infoEmbed] });
+            break;
+
+          default:
+            await interaction.reply({ content: '❌ Invalid subcommand.', flags: 64 });
+        }
+        
+        await storage.incrementCommandUsed(interaction.guild!.id);
       }
     };
 
@@ -1408,15 +1791,46 @@ class DiscordBot {
     const whiteTeaCommand: Command = {
       data: new SlashCommandBuilder()
         .setName('whitetea')
-        .setDescription('Play white tea game - guess the number!'),
+        .setDescription('Play white tea guessing game!')
+        .addIntegerOption((option: any) =>
+          option.setName('guess')
+            .setDescription('Your guess (1-100)')
+            .setRequired(true)
+            .setMinValue(1)
+            .setMaxValue(100)),
       execute: async (interaction) => {
-        const number = Math.floor(Math.random() * 100) + 1;
+        const userGuess = interaction.options.getInteger('guess')!;
+        const correctNumber = Math.floor(Math.random() * 100) + 1;
+        
+        let result: string;
+        let color: string;
+        
+        if (userGuess === correctNumber) {
+          result = '🎉 **Incredible!** You guessed it exactly right!';
+          color = '#57F287';
+        } else {
+          const difference = Math.abs(userGuess - correctNumber);
+          if (difference <= 5) {
+            result = '🔥 **So close!** You were within 5 numbers!';
+            color = '#FEE75C';
+          } else if (difference <= 15) {
+            result = '👍 **Good guess!** You were getting warm.';
+            color = '#5865F2';
+          } else {
+            result = '❄️ **Nice try!** You were a bit far off.';
+            color = '#ED4245';
+          }
+        }
         
         const embed = new EmbedBuilder()
-          .setColor('#F0F8FF')
-          .setTitle('🍃 White Tea Game')
-          .setDescription('I\'m thinking of a number between 1 and 100!')
-          .addFields({ name: 'Your Challenge', value: `Try to guess: **${number}**\nYou got it right!` })
+          .setColor(color as any)
+          .setTitle('🍃 White Tea Game Results')
+          .setDescription(`You guessed: **${userGuess}**\nThe number was: **${correctNumber}**\n\n${result}`)
+          .addFields({ 
+            name: 'Difference', 
+            value: `${Math.abs(userGuess - correctNumber)} numbers away`, 
+            inline: true 
+          })
           .setTimestamp();
           
         await interaction.reply({ embeds: [embed] });
