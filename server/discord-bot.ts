@@ -1526,6 +1526,19 @@ class DiscordBot {
   }
 
   private setupEventListeners() {
+    // Global error handling to prevent crashes
+    this.client.on('error', (error) => {
+      console.error('Discord client error:', error);
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    });
+
+    process.on('uncaughtException', (error) => {
+      console.error('Uncaught Exception:', error);
+    });
+
     this.client.once('ready', async () => {
       console.log(`Bot is ready! Logged in as ${this.client.user?.tag}`);
       
@@ -1669,8 +1682,19 @@ class DiscordBot {
 
         // Check for built-in commands first
         if (this.commands.has(commandName)) {
-          await this.handlePrefixCommand(message, commandName, args);
-          await storage.incrementCommandUsed(message.guild!.id);
+          try {
+            await this.handlePrefixCommand(message, commandName, args);
+            await storage.incrementCommandUsed(message.guild!.id);
+          } catch (error) {
+            console.error('Error in prefix command execution:', error);
+            try {
+              if ('send' in message.channel) {
+                await message.channel.send('There was an error executing this command!');
+              }
+            } catch (replyError) {
+              console.error('Failed to send error message:', replyError);
+            }
+          }
           return;
         }
 
@@ -1678,8 +1702,19 @@ class DiscordBot {
         const customCommands = await storage.getCustomCommands(message.guild!.id);
         const customCommand = customCommands.find(cmd => cmd.name === commandName);
         if (customCommand) {
-          await message.reply(customCommand.response);
-          await storage.incrementCommandUsed(message.guild!.id);
+          try {
+            await message.reply(customCommand.response);
+            await storage.incrementCommandUsed(message.guild!.id);
+          } catch (error) {
+            console.error('Error replying to custom command:', error);
+            try {
+              if ('send' in message.channel) {
+                await message.channel.send(customCommand.response);
+              }
+            } catch (fallbackError) {
+              console.error('Failed to send custom command response:', fallbackError);
+            }
+          }
         }
       }
     });
@@ -1816,16 +1851,34 @@ class DiscordBot {
         deferred: false,
         commandName,
         reply: async (options: any) => {
-          if (typeof options === 'string') {
+          try {
+            if (typeof options === 'string') {
+              return await message.reply(options);
+            }
             return await message.reply(options);
+          } catch (error) {
+            // Fallback to channel send if reply fails
+            console.warn('Reply failed, using channel send as fallback:', error);
+            if ('send' in message.channel) {
+              if (typeof options === 'string') {
+                return await message.channel.send(options);
+              }
+              return await message.channel.send(options);
+            }
           }
-          return await message.reply(options);
         },
         followUp: async (options: any) => {
-          if (typeof options === 'string') {
-            return await (message.channel as any).send(options);
+          try {
+            if ('send' in message.channel) {
+              if (typeof options === 'string') {
+                return await message.channel.send(options);
+              }
+              return await message.channel.send(options);
+            }
+          } catch (error) {
+            console.error('FollowUp failed:', error);
+            throw error;
           }
-          return await (message.channel as any).send(options);
         },
         options: {
           getUser: (name: string) => {
@@ -1885,7 +1938,13 @@ class DiscordBot {
       }
     } catch (error) {
       console.error('Error executing prefix command:', error);
-      await message.reply('There was an error executing this command!');
+      try {
+        if ('send' in message.channel) {
+          await message.channel.send('There was an error executing this command!');
+        }
+      } catch (replyError) {
+        console.error('Failed to send error message:', replyError);
+      }
     }
   }
 
