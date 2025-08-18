@@ -792,6 +792,151 @@ export class EnhancedDiscordBot {
       }
     };
 
+    // ============================================================================
+    // ADDITIONAL UTILITY COMMANDS
+    // ============================================================================
+
+    // Help Command
+    const helpCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('help')
+        .setDescription('Show all available commands and their usage'),
+      execute: async (interaction) => {
+        const commandsList = [
+          '🎵 **Music**: `/music` - Advanced music bot with voice functionality',
+          '🤖 **AI Commands**: `/ai` - AI-powered features using OpenAI',
+          '🎵 **Lyrics**: `/lyrics` - Look up song lyrics', 
+          '🎮 **Fun**: `/fun` - Games and entertainment commands',
+          '🛡️ **Moderation**: `/mod` - Advanced moderation tools',
+          '🌤️ **Weather**: `/weather` - Get weather information',
+          '📰 **News**: `/news` - Get latest news headlines',
+          '👥 **Roles**: `/role` - Role management commands',
+          '📚 **Urban Dictionary**: `/urban` - Look up definitions',
+          '🎰 **Games**: `/blackjack` - Play blackjack game',
+          '⚙️ **Utility**: `/ping`, `/serverinfo`, `/userinfo`, `/avatar`'
+        ].join('\n');
+
+        const embed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle('🤖 Bot Commands')
+          .setDescription(`Here are all available commands:\n\n${commandsList}`)
+          .addFields({
+            name: '📝 Prefix Commands',
+            value: 'All slash commands also work with prefix `,` (comma)\nExample: `,ping` or `,help`'
+          })
+          .setFooter({ text: `Total Commands: ${this.commands.size + 4}` })
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+
+    // Ping Command
+    const pingCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('ping')
+        .setDescription('Check bot latency and response time'),
+      execute: async (interaction) => {
+        const sent = await interaction.reply({ content: 'Pinging...', fetchReply: true });
+        const timeDiff = sent.createdTimestamp - interaction.createdTimestamp;
+        
+        const embed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle('🏓 Pong!')
+          .addFields(
+            { name: 'Bot Latency', value: `${timeDiff}ms`, inline: true },
+            { name: 'API Latency', value: `${Math.round(this.client.ws.ping)}ms`, inline: true },
+            { name: 'Status', value: timeDiff < 200 ? '🟢 Excellent' : timeDiff < 500 ? '🟡 Good' : '🔴 Poor', inline: true }
+          )
+          .setTimestamp();
+
+        await interaction.editReply({ content: '', embeds: [embed] });
+      }
+    };
+
+    // Server Info Command
+    const serverInfoCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('serverinfo')
+        .setDescription('Display information about the current server'),
+      execute: async (interaction) => {
+        const guild = interaction.guild;
+        if (!guild) return;
+
+        const embed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle(`Server Information: ${guild.name}`)
+          .setThumbnail(guild.iconURL())
+          .addFields(
+            { name: 'Server ID', value: guild.id, inline: true },
+            { name: 'Owner', value: `<@${guild.ownerId}>`, inline: true },
+            { name: 'Created', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:F>`, inline: true },
+            { name: 'Members', value: guild.memberCount.toString(), inline: true },
+            { name: 'Channels', value: guild.channels.cache.size.toString(), inline: true },
+            { name: 'Roles', value: guild.roles.cache.size.toString(), inline: true },
+            { name: 'Boost Level', value: `Level ${guild.premiumTier}`, inline: true },
+            { name: 'Boost Count', value: guild.premiumSubscriptionCount?.toString() || '0', inline: true }
+          )
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+
+    // User Info Command
+    const userInfoCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('userinfo')
+        .setDescription('Display information about a user')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('The user to get information about')),
+      execute: async (interaction) => {
+        const user = interaction.options.getUser('user') || interaction.user;
+        const member = interaction.guild?.members.cache.get(user.id);
+
+        const embed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle(`User Information: ${user.tag}`)
+          .setThumbnail(user.displayAvatarURL())
+          .addFields(
+            { name: 'User ID', value: user.id, inline: true },
+            { name: 'Account Created', value: `<t:${Math.floor(user.createdTimestamp / 1000)}:F>`, inline: true }
+          );
+
+        if (member) {
+          embed.addFields(
+            { name: 'Joined Server', value: `<t:${Math.floor(member.joinedTimestamp! / 1000)}:F>`, inline: true },
+            { name: 'Highest Role', value: member.roles.highest.name, inline: true },
+            { name: 'Role Count', value: (member.roles.cache.size - 1).toString(), inline: true }
+          );
+        }
+
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+
+    // Avatar Command
+    const avatarCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('avatar')
+        .setDescription('Display a user\'s avatar')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('The user whose avatar to display')),
+      execute: async (interaction) => {
+        const user = interaction.options.getUser('user') || interaction.user;
+        
+        const embed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle(`${user.tag}'s Avatar`)
+          .setImage(user.displayAvatarURL({ size: 512 }))
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+
     // Add all commands to the collection
     this.commands.set('music', musicCommand);
     this.commands.set('ai', openaiCommand);
@@ -803,6 +948,11 @@ export class EnhancedDiscordBot {
     this.commands.set('role', roleCommand);
     this.commands.set('urban', urbanCommand);
     this.commands.set('blackjack', blackjackCommand);
+    this.commands.set('help', helpCommand);
+    this.commands.set('ping', pingCommand);
+    this.commands.set('serverinfo', serverInfoCommand);
+    this.commands.set('userinfo', userInfoCommand);
+    this.commands.set('avatar', avatarCommand);
   }
 
   // ============================================================================
