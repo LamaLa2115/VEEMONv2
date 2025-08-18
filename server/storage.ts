@@ -109,7 +109,7 @@ export class MemStorage implements IStorage {
   async createServer(server: InsertDiscordServer): Promise<DiscordServer> {
     const newServer: DiscordServer = {
       ...server,
-      prefix: server.prefix ?? "!",
+      prefix: server.prefix ?? ",",
       autoModEnabled: server.autoModEnabled ?? false,
       musicVolume: server.musicVolume ?? 50,
       lastfmUsername: server.lastfmUsername ?? null,

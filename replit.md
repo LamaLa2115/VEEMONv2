@@ -16,6 +16,10 @@ Preferred communication style: Simple, everyday language.
   - Fixed Discord bot intents issue and got bot online with slash commands
   - Bot successfully connects as "veemon#4083" and registers all commands
   - Dashboard displays real-time bot status and server statistics
+  - **Added Last.fm API integration** with comprehensive music features (now playing, recent tracks, top artists)
+  - **Implemented dual command system** supporting both slash commands (/) and prefix commands (,)
+  - **Changed bot prefix from "!" to ","** for all servers and future installations
+  - Enhanced prefix command parsing to handle complex arguments and subcommands for full feature parity
 
 ## System Architecture
 

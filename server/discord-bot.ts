@@ -709,7 +709,7 @@ class DiscordBot {
           await interaction.reply({ embeds: [embed] });
         } else if (subcommand === 'show') {
           const server = await storage.getServer(interaction.guild.id);
-          const currentPrefix = server?.prefix || '!';
+          const currentPrefix = server?.prefix || ',';
           
           const embed = new EmbedBuilder()
             .setColor('#5865F2')
@@ -1240,7 +1240,7 @@ class DiscordBot {
       await storage.createServer({
         id: guild.id,
         name: guild.name,
-        prefix: '!',
+        prefix: ',',
         autoModEnabled: false,
         musicVolume: 50,
         lastfmUsername: null,
@@ -1312,7 +1312,7 @@ class DiscordBot {
 
       // Handle both custom commands and bot commands (prefix-based)
       const server = await storage.getServer(message.guild!.id);
-      const prefix = (server?.prefix ?? '!');
+      const prefix = (server?.prefix ?? ',');
       if (message.content.startsWith(prefix)) {
         const args = message.content.slice(prefix.length).trim().split(/ +/);
         const commandName = args.shift()?.toLowerCase();
