@@ -833,26 +833,33 @@ export class EnhancedDiscordBot {
       }
     };
 
-    // Ping Command
+    // Enhanced Ping Command with fancy UI
     const pingCommand: Command = {
       data: new SlashCommandBuilder()
         .setName('ping')
-        .setDescription('Check bot latency and response time'),
+        .setDescription('🏓 Check bot latency, performance, and system information'),
       execute: async (interaction) => {
         const sent = await interaction.reply({ content: 'Pinging...', fetchReply: true });
         const timeDiff = sent.createdTimestamp - interaction.createdTimestamp;
+        const apiLatency = Math.round(this.client.ws.ping);
         
         const embed = new EmbedBuilder()
-          .setColor('#5865F2')
+          .setColor('#57F287')
           .setTitle('🏓 Pong!')
+          .setDescription('Bot is online and responding!')
           .addFields(
-            { name: 'Bot Latency', value: `${timeDiff}ms`, inline: true },
-            { name: 'API Latency', value: `${Math.round(this.client.ws.ping)}ms`, inline: true },
-            { name: 'Status', value: timeDiff < 200 ? '🟢 Excellent' : timeDiff < 500 ? '🟡 Good' : '🔴 Poor', inline: true }
+            { name: '📡 Bot Latency', value: `${timeDiff}ms`, inline: true },
+            { name: '🌐 API Latency', value: `${apiLatency}ms`, inline: true },
+            { name: '⚡ Status', value: timeDiff < 100 ? '🟢 Excellent' : timeDiff < 200 ? '🟡 Good' : '🔴 Slow', inline: true },
+            { name: '📊 Performance', value: `**Uptime:** ${this.formatUptime(process.uptime())}\n**Memory:** ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB\n**Guilds:** ${this.client.guilds.cache.size}`, inline: false },
+            { name: '💡 Usage', value: 'Use `/help` for command list\nBoth `/` and `,` prefixes work!', inline: false }
           )
+          .setFooter({ text: `Requested by ${interaction.user.tag}` })
           .setTimestamp();
 
-        await interaction.editReply({ content: '', embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
+
+
       }
     };
 
@@ -1148,6 +1155,147 @@ export class EnhancedDiscordBot {
       }
     };
 
+    // ============================================================================
+    // BOT MANAGEMENT COMMANDS
+    // ============================================================================
+
+    // Bot Info Command with fancy UI
+    const botInfoCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('botinfo')
+        .setDescription('Display detailed bot information and statistics'),
+      execute: async (interaction) => {
+        const botUser = this.client.user!;
+        const guilds = this.client.guilds.cache.size;
+        const users = this.client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
+        const uptime = process.uptime();
+        const memoryUsage = process.memoryUsage();
+        
+        const uptimeString = this.formatUptime(uptime);
+        const memoryMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
+        
+        const embed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle('🤖 Bot Information')
+          .setThumbnail(botUser.displayAvatarURL({ size: 256 }))
+          .setDescription(`**${botUser.tag}** - Advanced Discord Bot`)
+          .addFields(
+            { name: '📊 Statistics', value: `**Servers:** ${guilds}\n**Users:** ${users}\n**Commands:** ${this.commands.size}`, inline: true },
+            { name: '⏱️ Performance', value: `**Uptime:** ${uptimeString}\n**Memory:** ${memoryMB}MB\n**Ping:** ${this.client.ws.ping}ms`, inline: true },
+            { name: '🔧 Technical', value: `**Node.js:** ${process.version}\n**Discord.js:** 14.x\n**Environment:** ${config.NODE_ENV}`, inline: true },
+            { name: '✨ Features', value: '🎵 Music Bot\n🛡️ Moderation\n🤖 AI Integration\n🎮 Games & Fun\n📰 News & Weather\n👥 Role Management', inline: false },
+            { name: '📝 Prefix Commands', value: `Prefix: \`${config.DEFAULT_PREFIX}\`\nBoth slash (/) and prefix commands supported`, inline: true },
+            { name: '🔗 Links', value: '[Invite Bot](https://discord.com/api/oauth2/authorize?client_id=' + botUser.id + '&permissions=8&scope=bot%20applications.commands)', inline: true }
+          )
+          .setFooter({ text: `Bot ID: ${botUser.id}` })
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed] });
+      }
+    };
+
+    // Reload Command (Bot Owner Only) with confirmation UI
+    const reloadCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('reload')
+        .setDescription('🔄 Restart the bot (Owner only)'),
+      execute: async (interaction) => {
+        if (!this.isSuperAdmin(interaction.user.id)) {
+          const embed = new EmbedBuilder()
+            .setColor('#ED4245')
+            .setTitle('❌ Access Denied')
+            .setDescription('This command is restricted to the bot owner only.')
+            .addFields({ name: '🔒 Permission Required', value: 'Bot Owner Access Level' })
+            .setTimestamp();
+          
+          return await interaction.reply({ embeds: [embed], ephemeral: true });
+        }
+
+        const embed = new EmbedBuilder()
+          .setColor('#F39C12')
+          .setTitle('🔄 Bot Reload Initiated')
+          .setDescription('Bot is restarting... This may take a few moments.')
+          .addFields(
+            { name: '⏳ Status', value: 'Reloading commands and reconnecting...', inline: true },
+            { name: '🎯 Initiated by', value: interaction.user.tag, inline: true }
+          )
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed] });
+        
+        // Restart the bot process
+        setTimeout(() => {
+          process.exit(0);
+        }, 2000);
+      }
+    };
+
+    // Enhanced Help Command with detailed UI and navigation
+    const enhancedHelpCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('help')
+        .setDescription('📚 Display all commands with detailed usage information')
+        .addStringOption(option =>
+          option.setName('command')
+            .setDescription('Get detailed help for a specific command')
+            .setRequired(false)),
+      execute: async (interaction) => {
+        const specificCommand = interaction.options.getString('command');
+        
+        if (specificCommand) {
+          // Show detailed help for specific command
+          const commandHelp = this.getCommandHelp(specificCommand);
+          if (!commandHelp) {
+            const embed = new EmbedBuilder()
+              .setColor('#ED4245')
+              .setTitle('❌ Command Not Found')
+              .setDescription(`Command "${specificCommand}" does not exist.`)
+              .addFields({ name: '💡 Tip', value: 'Use `/help` without parameters to see all available commands.' })
+              .setTimestamp();
+            
+            return await interaction.reply({ embeds: [embed], ephemeral: true });
+          }
+          
+          await interaction.reply({ embeds: [commandHelp] });
+        } else {
+          // Show all commands overview
+          const commandCategories = {
+            '🎵 Music': ['music - Advanced music bot with voice functionality'],
+            '🤖 AI & Utility': ['ai - AI-powered features using OpenAI', 'lyrics - Look up song lyrics', 'urban - Urban Dictionary lookup'],
+            '🛡️ Moderation': ['mod - Advanced moderation tools', 'clear - Clear messages', 'timeout - Timeout users', 'warn - Warn users'],
+            '👥 Server Management': ['role - Role management system', 'serverinfo - Server information', 'userinfo - User information'],
+            '🎮 Games & Fun': ['fun - Games and entertainment', 'blackjack - Blackjack game', 'coinflip - Coin flip game'],
+            '🌐 Information': ['weather - Weather information', 'news - Latest news headlines', 'avatar - User avatars'],
+            '⚙️ Bot Controls': ['botinfo - Bot information', 'ping - Bot latency', 'help - This help menu'],
+            '💤 Utility': ['afk - Set AFK status']
+          };
+
+          const embed = new EmbedBuilder()
+            .setColor('#5865F2')
+            .setTitle('📚 Bot Commands Help')
+            .setDescription(`**${this.client.user?.tag}** - Complete command reference\n\n**Prefix:** \`${config.DEFAULT_PREFIX}\` | **Slash Commands:** \`/\``)
+            .setThumbnail(this.client.user?.displayAvatarURL() || null);
+
+          Object.entries(commandCategories).forEach(([category, commands]) => {
+            embed.addFields({
+              name: category,
+              value: commands.map(cmd => `\`${cmd}\``).join('\n'),
+              inline: true
+            });
+          });
+
+          embed.addFields(
+            { name: '📝 Usage Examples', value: '`/help music` - Detailed music command help\n`/ping` or `,ping` - Check bot latency\n`,help` - This menu with prefix', inline: false },
+            { name: '🔗 Support', value: 'Use `/help [command]` for detailed usage of any command', inline: false }
+          )
+          .setFooter({ text: `Total Commands: ${this.commands.size} | Both / and ${config.DEFAULT_PREFIX} prefixes supported` })
+          .setTimestamp();
+
+          await interaction.reply({ embeds: [embed] });
+        }
+      }
+    };
+
     // Add all commands to the collection
     this.commands.set('music', musicCommand);
     this.commands.set('ai', openaiCommand);
@@ -1159,7 +1307,7 @@ export class EnhancedDiscordBot {
     this.commands.set('role', roleCommand);
     this.commands.set('urban', urbanCommand);
     this.commands.set('blackjack', blackjackCommand);
-    this.commands.set('help', helpCommand);
+    this.commands.set('help', enhancedHelpCommand);
     this.commands.set('ping', pingCommand);
     this.commands.set('serverinfo', serverInfoCommand);
     this.commands.set('userinfo', userInfoCommand);
@@ -1170,6 +1318,9 @@ export class EnhancedDiscordBot {
     this.commands.set('timeout', timeoutCommand);
     this.commands.set('warn', warnCommand);
     this.commands.set('coinflip', coinflipCommand);
+    // Bot management commands
+    this.commands.set('botinfo', botInfoCommand);
+    this.commands.set('reload', reloadCommand);
   }
 
   // ============================================================================
@@ -2577,7 +2728,14 @@ export class EnhancedDiscordBot {
       const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
       const commandData = Array.from(this.commands.values()).map(command => command.data.toJSON());
       
-      console.log(`Started refreshing ${commandData.length} application (/) commands.`);
+      console.log(`🔄 Registering ${commandData.length} slash commands globally...`);
+      
+      // First clear existing commands to prevent conflicts
+      await rest.put(Routes.applicationCommands(this.client.user!.id), { body: [] });
+      console.log('🧹 Cleared existing commands');
+      
+      // Wait a moment then register new commands
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Register globally (for all guilds)
       const data = await rest.put(
@@ -2585,10 +2743,24 @@ export class EnhancedDiscordBot {
         { body: commandData }
       ) as any[];
       
-      console.log(`✅ Successfully reloaded ${data.length} application (/) commands.`);
-    } catch (error) {
-      console.error('❌ Failed to register commands:', error);
-      // Don't throw the error - let the bot continue running
+      console.log(`✅ Successfully registered ${data.length} slash commands!`);
+      console.log('📝 Commands registered:', commandData.map(cmd => cmd.name).join(', '));
+    } catch (error: any) {
+      console.error('❌ Failed to register commands:', error.message);
+      
+      // Try guild-specific registration as fallback
+      try {
+        console.log('🔄 Attempting guild-specific registration as fallback...');
+        for (const guild of this.client.guilds.cache.values()) {
+          await rest.put(
+            Routes.applicationGuildCommands(this.client.user!.id, guild.id),
+            { body: commandData }
+          );
+          console.log(`✅ Registered commands for guild: ${guild.name}`);
+        }
+      } catch (guildError: any) {
+        console.error('❌ Guild registration also failed:', guildError.message);
+      }
     }
   }
 
@@ -2790,6 +2962,104 @@ export class EnhancedDiscordBot {
       }
       throw new Error(error.response?.data?.message || 'Failed to fetch Urban Dictionary definition');
     }
+  }
+
+  // ============================================================================
+  // UTILITY METHODS
+  // ============================================================================
+  
+  private formatUptime(uptime: number): string {
+    const days = Math.floor(uptime / 86400);
+    const hours = Math.floor((uptime % 86400) / 3600);
+    const minutes = Math.floor((uptime % 3600) / 60);
+    const seconds = Math.floor(uptime % 60);
+    
+    if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+  }
+  
+  private getCommandHelp(commandName: string): EmbedBuilder | null {
+    const helpData: { [key: string]: any } = {
+      music: {
+        title: '🎵 Music Command',
+        description: 'Advanced music bot with voice functionality',
+        usage: [
+          '`/music play <song>` - Play a song from YouTube or Spotify',
+          '`/music queue` - Show current music queue',
+          '`/music skip` - Skip current song',
+          '`/music stop` - Stop music and leave voice channel',
+          '`/music pause` - Pause current song',
+          '`/music resume` - Resume paused song',
+          '`/music volume <1-100>` - Set music volume',
+          '`/music nowplaying` - Show currently playing song',
+          '`/music shuffle` - Shuffle queue',
+          '`/music loop` - Toggle loop mode'
+        ],
+        examples: '`/music play Never Gonna Give You Up`\n`/music volume 50`\n`,music play despacito`',
+        permissions: 'Connect to Voice Channels'
+      },
+      mod: {
+        title: '🛡️ Moderation Command',
+        description: 'Advanced moderation tools for server management',
+        usage: [
+          '`/mod massban <userids>` - Ban multiple users at once',
+          '`/mod cleanup [user] [contains] [limit]` - Clean up messages',
+          '`/mod automod <enabled>` - Configure auto-moderation',
+          '`/mod quarantine <user>` - Remove all roles from user',
+          '`/mod unquarantine <user>` - Restore user roles'
+        ],
+        examples: '`/mod cleanup @user`\n`/mod massban 123456789 987654321`\n`,mod automod true`',
+        permissions: 'Moderate Members, Manage Messages'
+      },
+      ai: {
+        title: '🤖 AI Command',
+        description: 'AI-powered features using OpenAI technology',
+        usage: [
+          '`/ai chat <message>` - Chat with AI',
+          '`/ai image <prompt>` - Generate AI image',
+          '`/ai analyze <image>` - Analyze uploaded image',
+          '`/ai summarize <text>` - Summarize long text'
+        ],
+        examples: '`/ai chat Hello, how are you?`\n`/ai image a cat wearing sunglasses`\n`,ai summarize <long text>`',
+        permissions: 'Send Messages'
+      },
+      role: {
+        title: '👥 Role Command',
+        description: 'Complete role management system',
+        usage: [
+          '`/role add <user> <role>` - Add role to user',
+          '`/role remove <user> <role>` - Remove role from user',
+          '`/role create <name> [color] [options]` - Create new role',
+          '`/role delete <role>` - Delete role',
+          '`/role list` - List all server roles',
+          '`/role info <role>` - Get role information',
+          '`/role massadd <role> <users>` - Add role to multiple users',
+          '`/role permissions <role> <preset>` - Set role permissions'
+        ],
+        examples: '`/role add @user @Member`\n`/role create VIP #gold true`\n`,role list`',
+        permissions: 'Manage Roles'
+      }
+    };
+    
+    const data = helpData[commandName];
+    if (!data) return null;
+    
+    const embed = new EmbedBuilder()
+      .setColor('#5865F2')
+      .setTitle(data.title)
+      .setDescription(data.description)
+      .addFields(
+        { name: '📝 Usage', value: data.usage.join('\n'), inline: false },
+        { name: '💡 Examples', value: data.examples, inline: false },
+        { name: '🔒 Permissions', value: data.permissions, inline: true },
+        { name: '🔄 Prefix Support', value: `Both \`/\` and \`${config.DEFAULT_PREFIX}\` work`, inline: true }
+      )
+      .setFooter({ text: `Command: ${commandName} | Use /help for all commands` })
+      .setTimestamp();
+    
+    return embed;
   }
 
   // ============================================================================
