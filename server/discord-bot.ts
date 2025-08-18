@@ -29,10 +29,8 @@ class DiscordBot {
       intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessageReactions,
-        GatewayIntentBits.MessageContent,
       ],
     });
     
