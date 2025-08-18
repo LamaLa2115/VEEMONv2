@@ -10,7 +10,8 @@ import {
   createAudioResource, 
   VoiceConnectionStatus, 
   AudioPlayerStatus,
-  getVoiceConnection 
+  getVoiceConnection,
+  entersState
 } from '@discordjs/voice';
 import { storage } from './storage';
 import { config } from './config';
@@ -114,6 +115,12 @@ export class EnhancedDiscordBot {
             .addStringOption(opt => 
               opt.setName('query').setDescription('Song name, URL, or search query').setRequired(true)))
         .addSubcommand(sub => 
+          sub.setName('join')
+            .setDescription('Join your voice channel'))
+        .addSubcommand(sub => 
+          sub.setName('leave')
+            .setDescription('Leave the voice channel'))
+        .addSubcommand(sub => 
           sub.setName('queue').setDescription('Show the music queue'))
         .addSubcommand(sub => 
           sub.setName('skip').setDescription('Skip the current song'))
@@ -161,6 +168,12 @@ export class EnhancedDiscordBot {
         switch (subcommand) {
           case 'play':
             await this.handleMusicPlay(interaction, member.voice.channel as VoiceChannel);
+            break;
+          case 'join':
+            await this.handleMusicJoin(interaction, member.voice.channel as VoiceChannel);
+            break;
+          case 'leave':
+            await this.handleMusicLeave(interaction);
             break;
           case 'queue':
             await this.handleMusicQueue(interaction);
@@ -1369,26 +1382,71 @@ export class EnhancedDiscordBot {
         adapterCreator: voiceChannel.guild.voiceAdapterCreator,
       });
 
-      // Search for the song using play-dl
+      // Search for the song using play-dl with improved search
       let songInfo;
+      let songUrl;
       
-      if (play.yt_validate(query) === 'video') {
-        // Direct YouTube URL
-        songInfo = await play.video_info(query);
-      } else {
-        // Search query
-        const searchResults = await play.search(query, { limit: 1, source: { youtube: "video" } });
-        if (!searchResults || searchResults.length === 0) {
-          return await interaction.editReply({ content: `🎵 No results found for "${query}"` });
+      try {
+        // First try to validate if it's a YouTube URL
+        const urlValidation = play.yt_validate(query);
+        if (urlValidation === 'video') {
+          // Direct YouTube URL
+          songInfo = await play.video_info(query);
+          songUrl = query;
+        } else {
+          // Search query - try multiple search methods
+          console.log(`🔍 Searching for: "${query}"`);
+          
+          // Try YouTube search first
+          const searchResults = await play.search(query, { 
+            limit: 5, 
+            source: { youtube: "video" } 
+          });
+          
+          if (!searchResults || searchResults.length === 0) {
+            // Try Spotify search as fallback
+            const spotifyResults = await play.search(query, { 
+              limit: 3, 
+              source: { spotify: "track" } 
+            });
+            
+            if (!spotifyResults || spotifyResults.length === 0) {
+              return await interaction.editReply({ 
+                content: `🎵 No results found for "${query}". Try being more specific or use a direct YouTube URL.` 
+              });
+            }
+            
+            songInfo = spotifyResults[0];
+            songUrl = (songInfo as any).url;
+          } else {
+            songInfo = searchResults[0];
+            songUrl = (songInfo as any).url;
+          }
         }
-        songInfo = searchResults[0];
+        
+        console.log(`🎵 Found song:`, (songInfo as any).title || 'Unknown');
+        
+      } catch (searchError) {
+        console.error('Search error:', searchError);
+        return await interaction.editReply({ 
+          content: `🎵 Failed to search for "${query}". Please try a different search term or YouTube URL.` 
+        });
       }
 
-      // Get audio stream
-      const songUrl = (songInfo as any).url || (songInfo as any).video_details?.url || query;
-      const stream = await play.stream(songUrl);
+      // Get audio stream with error handling
+      let stream;
+      try {
+        stream = await play.stream(songUrl, { quality: 2 });
+      } catch (streamError) {
+        console.error('Stream error:', streamError);
+        return await interaction.editReply({ 
+          content: `🎵 Failed to get audio stream for "${query}". The video might be unavailable or restricted.` 
+        });
+      }
+
       const resource = createAudioResource(stream.stream, { 
         inputType: stream.type,
+        inlineVolume: true
       });
 
       // Create audio player and play
@@ -1397,7 +1455,7 @@ export class EnhancedDiscordBot {
       player.play(resource);
       
       const musicQueue: MusicQueue = {
-        title: (songInfo as any).title || (songInfo as any).video_details?.title || 'Unknown Title',
+        title: (songInfo as any).title || (songInfo as any).video_details?.title || query,
         url: songUrl,
         duration: (songInfo as any).durationInSec ? this.formatDuration((songInfo as any).durationInSec) : 'Unknown',
         requestedBy: interaction.user.tag
@@ -1472,6 +1530,66 @@ export class EnhancedDiscordBot {
     }
     
     await interaction.reply({ embeds: [embed] });
+  }
+
+  private async handleMusicJoin(interaction: any, voiceChannel: VoiceChannel) {
+    try {
+      // Join the voice channel
+      const connection = joinVoiceChannel({
+        channelId: voiceChannel.id,
+        guildId: voiceChannel.guild.id,
+        adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor('#27AE60')
+        .setTitle('🎵 Joined Voice Channel')
+        .setDescription(`Successfully joined **${voiceChannel.name}**`)
+        .addFields(
+          { name: 'Voice Channel', value: voiceChannel.name, inline: true },
+          { name: 'Members', value: voiceChannel.members.size.toString(), inline: true }
+        )
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed] });
+      
+    } catch (error: any) {
+      console.error('Join voice channel error:', error);
+      await interaction.reply({ 
+        content: `🎵 Failed to join voice channel: ${error.message}`,
+        ephemeral: true 
+      });
+    }
+  }
+
+  private async handleMusicLeave(interaction: any) {
+    try {
+      const connection = getVoiceConnection(interaction.guild.id);
+      
+      if (!connection) {
+        return await interaction.reply({ 
+          content: '🎵 I\'m not currently in a voice channel!',
+          ephemeral: true 
+        });
+      }
+
+      connection.destroy();
+
+      const embed = new EmbedBuilder()
+        .setColor('#E74C3C')
+        .setTitle('🎵 Left Voice Channel')
+        .setDescription('Successfully left the voice channel')
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed] });
+      
+    } catch (error: any) {
+      console.error('Leave voice channel error:', error);
+      await interaction.reply({ 
+        content: `🎵 Failed to leave voice channel: ${error.message}`,
+        ephemeral: true 
+      });
+    }
   }
   
   private async handleMusicSkip(interaction: any) {
@@ -3323,7 +3441,7 @@ export class EnhancedDiscordBot {
       console.log('🧹 Cleared existing commands');
       
       // Wait a moment then register new commands
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Register globally (for all guilds) - using the exact method requested by user
       const clientId = this.client.user!.id;
@@ -3579,6 +3697,8 @@ export class EnhancedDiscordBot {
         description: 'Advanced music bot with voice functionality',
         usage: [
           '`/music play <song>` - Play a song from YouTube or Spotify',
+          '`/music join` - Join your voice channel',
+          '`/music leave` - Leave the voice channel',
           '`/music queue` - Show current music queue',
           '`/music skip` - Skip current song',
           '`/music stop` - Stop music and leave voice channel',
