@@ -104,15 +104,64 @@ class DiscordBot {
     const helpCommand: Command = {
       data: new SlashCommandBuilder()
         .setName('help')
-        .setDescription('Show help for bot commands'),
+        .setDescription('Show comprehensive help and command documentation'),
       execute: async (interaction) => {
-        const names = Array.from(this.commands.keys()).sort();
-        const embed = new EmbedBuilder()
+        const embed1 = new EmbedBuilder()
           .setColor('#5865F2')
-          .setTitle('🧭 Help')
-          .setDescription(names.map(n => `/${n}`).join(' · '))
+          .setTitle('🤖 VEEMON Discord Bot')
+          .setDescription(`**Command Formats:**\n• **Slash Commands**: \`/command options\` (recommended)\n• **Prefix Commands**: \`,command options\`\n\n**Total Commands Available:** ${this.commands.size}`)
+          .addFields(
+            { 
+              name: '🛡️ Moderation Commands', 
+              value: '`/kick` `/ban` `/timeout` `/warn` `/purge` `/lock` `/unlock` `/clear`', 
+              inline: false 
+            },
+            { 
+              name: '⚙️ Server Configuration', 
+              value: '`/prefix` `/logging` `/antinuke`', 
+              inline: false 
+            },
+            { 
+              name: '🎵 Music & Entertainment', 
+              value: '`/music` `/lastfm` `/nowplaying`', 
+              inline: false 
+            },
+            { 
+              name: '🎮 Fun Commands', 
+              value: '`/coinflip` `/blackjack` `/whitetea` `/blacktea`', 
+              inline: false 
+            }
+          )
           .setTimestamp();
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+
+        const embed2 = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle('📋 Additional Commands')
+          .addFields(
+            { 
+              name: 'ℹ️ Information', 
+              value: '`/help` `/serverinfo` `/userinfo` `/botinfo`', 
+              inline: false 
+            },
+            { 
+              name: '🛠️ Utility', 
+              value: '`/afk` `/createcommand` `/search` `/role`', 
+              inline: false 
+            },
+            { 
+              name: '🌟 Advanced Features', 
+              value: '`/starboard` `/reactionroles` `/joingate` `/voicemaster` `/level` `/counters` `/bumpreminder` `/giveaway` `/webhook`', 
+              inline: false 
+            },
+            { 
+              name: '🤖 Bot Management', 
+              value: '`/reload` - Restart the bot (Admin only)', 
+              inline: false 
+            }
+          )
+          .setFooter({ text: 'Use /command for detailed usage • GitHub: LamaLa2115/VEEMONv2' });
+
+        await interaction.reply({ embeds: [embed1, embed2], ephemeral: true });
       }
     };
 
@@ -1513,12 +1562,17 @@ class DiscordBot {
       if (!interaction.isChatInputCommand()) return;
 
       const command = this.commands.get(interaction.commandName);
-      if (!command) return;
+      if (!command) {
+        console.log(`Unknown command: ${interaction.commandName}`);
+        return;
+      }
 
       try {
+        console.log(`Executing slash command: ${interaction.commandName} by ${interaction.user.username}`);
         await command.execute(interaction);
+        await storage.incrementCommandUsed(interaction.guild?.id || 'unknown');
       } catch (error) {
-        console.error('Error executing command:', error);
+        console.error('Error executing slash command:', error);
         const reply = { content: 'There was an error executing this command!', ephemeral: true };
         
         if (interaction.replied || interaction.deferred) {
