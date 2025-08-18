@@ -2426,6 +2426,7 @@ export class EnhancedDiscordBot {
       this.client.user?.setActivity(config.BOT_STATUS.name, { type: config.BOT_STATUS.type as any });
       
       // Register slash commands
+      console.log(`Registering ${this.commands.size} enhanced slash commands...`);
       await this.registerCommands();
     });
 
@@ -2570,20 +2571,21 @@ export class EnhancedDiscordBot {
   
   private async registerCommands() {
     try {
-      const rest = new REST().setToken(config.DISCORD_BOT_TOKEN);
+      const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
       const commandData = Array.from(this.commands.values()).map(command => command.data.toJSON());
       
-      console.log(`Registering ${commandData.length} enhanced slash commands...`);
+      console.log(`Started refreshing ${commandData.length} application (/) commands.`);
       
-      // Register globally
-      await rest.put(
+      // Register globally (for all guilds)
+      const data = await rest.put(
         Routes.applicationCommands(this.client.user!.id),
         { body: commandData }
-      );
+      ) as any[];
       
-      console.log('✅ Enhanced Discord bot commands registered successfully!');
+      console.log(`✅ Successfully reloaded ${data.length} application (/) commands.`);
     } catch (error) {
-      console.error('Failed to register enhanced commands:', error);
+      console.error('❌ Failed to register commands:', error);
+      // Don't throw the error - let the bot continue running
     }
   }
 
