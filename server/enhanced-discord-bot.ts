@@ -862,6 +862,12 @@ export class EnhancedDiscordBot {
         const timeDiff = sent.createdTimestamp - interaction.createdTimestamp;
         const apiLatency = Math.round(this.client.ws.ping);
         
+        // Calculate TPS (approximate based on event loop)
+        const startTime = process.hrtime.bigint();
+        await new Promise(resolve => setImmediate(resolve));
+        const endTime = process.hrtime.bigint();
+        const tps = Math.round(1000000000 / Number(endTime - startTime));
+        
         const embed = new EmbedBuilder()
           .setColor('#57F287')
           .setTitle('🏓 Pong!')
@@ -869,6 +875,7 @@ export class EnhancedDiscordBot {
           .addFields(
             { name: '📡 Bot Latency', value: `${timeDiff}ms`, inline: true },
             { name: '🌐 API Latency', value: `${apiLatency}ms`, inline: true },
+            { name: '⚡ TPS', value: `${tps.toLocaleString()}`, inline: true },
             { name: '⚡ Status', value: timeDiff < 100 ? '🟢 Excellent' : timeDiff < 200 ? '🟡 Good' : '🔴 Slow', inline: true },
             { name: '📊 Performance', value: `**Uptime:** ${this.formatUptime(process.uptime())}\n**Memory:** ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB\n**Guilds:** ${this.client.guilds.cache.size}`, inline: false },
             { name: '💡 Usage', value: 'Use `/help` for command list\nBoth `/` and `,` prefixes work!', inline: false }
@@ -877,8 +884,6 @@ export class EnhancedDiscordBot {
           .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
-
-
       }
     };
 
@@ -1193,6 +1198,12 @@ export class EnhancedDiscordBot {
         const uptimeString = this.formatUptime(uptime);
         const memoryMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
         
+        // Calculate TPS
+        const startTime = process.hrtime.bigint();
+        await new Promise(resolve => setImmediate(resolve));
+        const endTime = process.hrtime.bigint();
+        const tps = Math.round(1000000000 / Number(endTime - startTime));
+        
         const embed = new EmbedBuilder()
           .setColor('#5865F2')
           .setTitle('🤖 Bot Information')
@@ -1200,7 +1211,7 @@ export class EnhancedDiscordBot {
           .setDescription(`**${botUser.tag}** - Advanced Discord Bot`)
           .addFields(
             { name: '📊 Statistics', value: `**Servers:** ${guilds}\n**Users:** ${users}\n**Commands:** ${this.commands.size}`, inline: true },
-            { name: '⏱️ Performance', value: `**Uptime:** ${uptimeString}\n**Memory:** ${memoryMB}MB\n**Ping:** ${this.client.ws.ping}ms`, inline: true },
+            { name: '⏱️ Performance', value: `**Uptime:** ${uptimeString}\n**Memory:** ${memoryMB}MB\n**Ping:** ${this.client.ws.ping}ms\n**TPS:** ${tps.toLocaleString()}`, inline: true },
             { name: '🔧 Technical', value: `**Node.js:** ${process.version}\n**Discord.js:** 14.x\n**Environment:** ${config.NODE_ENV}`, inline: true },
             { name: '✨ Features', value: '🎵 Music Bot\n🛡️ Moderation\n🤖 AI Integration\n🎮 Games & Fun\n📰 News & Weather\n👥 Role Management', inline: false },
             { name: '📝 Prefix Commands', value: `Prefix: \`${config.DEFAULT_PREFIX}\`\nBoth slash (/) and prefix commands supported`, inline: true },
@@ -1277,7 +1288,7 @@ export class EnhancedDiscordBot {
           
           await interaction.reply({ embeds: [commandHelp] });
         } else {
-          // Show all commands overview
+          // Show all commands overview with buttons
           const commandCategories = {
             '🎵 Music': ['music - Advanced music bot with voice functionality'],
             '🤖 AI & Utility': ['ai - AI-powered features using OpenAI', 'lyrics - Look up song lyrics', 'urban - Urban Dictionary lookup'],
@@ -1310,7 +1321,28 @@ export class EnhancedDiscordBot {
           .setFooter({ text: `Total Commands: ${this.commands.size} | Both / and ${config.DEFAULT_PREFIX} prefixes supported` })
           .setTimestamp();
 
-          await interaction.reply({ embeds: [embed] });
+          // Add buttons for command categories
+          const buttons = new ActionRowBuilder<ButtonBuilder>()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId('help_mod')
+                .setLabel('🛡️ Moderation')
+                .setStyle(ButtonStyle.Primary),
+              new ButtonBuilder()
+                .setCustomId('help_fun')
+                .setLabel('🎮 Fun & Games')
+                .setStyle(ButtonStyle.Success),
+              new ButtonBuilder()
+                .setCustomId('help_music')
+                .setLabel('🎵 Music')
+                .setStyle(ButtonStyle.Secondary),
+              new ButtonBuilder()
+                .setCustomId('help_utility')
+                .setLabel('⚙️ Utility')
+                .setStyle(ButtonStyle.Secondary)
+            );
+
+          await interaction.reply({ embeds: [embed], components: [buttons] });
         }
       }
     };
@@ -1433,15 +1465,29 @@ export class EnhancedDiscordBot {
         });
       }
 
-      // Get audio stream with error handling
+      // Get audio stream with alternative methods
       let stream;
       try {
-        stream = await play.stream(songUrl, { quality: 2 });
+        // Try different streaming approaches
+        if (songUrl.includes('youtube.com') || songUrl.includes('youtu.be')) {
+          // Use alternative YouTube streaming method
+          stream = await play.stream(songUrl, { quality: 1, discordPlayerCompatibility: true });
+        } else {
+          stream = await play.stream(songUrl, { quality: 2, discordPlayerCompatibility: true });
+        }
       } catch (streamError) {
         console.error('Stream error:', streamError);
-        return await interaction.editReply({ 
-          content: `🎵 Failed to get audio stream for "${query}". The video might be unavailable or restricted.` 
-        });
+        
+        // Try fallback method with different quality
+        try {
+          console.log('🔄 Trying fallback streaming method...');
+          stream = await play.stream(songUrl, { quality: 0, discordPlayerCompatibility: true });
+        } catch (fallbackError) {
+          console.error('Fallback stream error:', fallbackError);
+          return await interaction.editReply({ 
+            content: `🎵 Unable to stream "${query}". This might be due to YouTube restrictions. Try a different song or direct YouTube URL.` 
+          });
+        }
       }
 
       const resource = createAudioResource(stream.stream, { 
@@ -3291,26 +3337,36 @@ export class EnhancedDiscordBot {
 
     // Handle slash command interactions
     this.client.on('interactionCreate', async (interaction) => {
-      if (!interaction.isChatInputCommand()) return;
+      if (interaction.isChatInputCommand()) {
+        const command = this.commands.get(interaction.commandName);
+        if (!command) return;
 
-      const command = this.commands.get(interaction.commandName);
-      if (!command) return;
-
-      try {
-        await command.execute(interaction);
-        await storage.incrementCommandUsed(interaction.guild?.id || 'DM');
-      } catch (error: any) {
-        console.error('Command execution error:', error);
-        
-        const errorMessage = {
-          content: `❌ An error occurred while executing this command: ${error.message}`,
-          ephemeral: true
-        };
-        
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(errorMessage);
-        } else {
-          await interaction.reply(errorMessage);
+        try {
+          await command.execute(interaction);
+          await storage.incrementCommandUsed(interaction.guild?.id || 'DM');
+        } catch (error: any) {
+          console.error('Command execution error:', error);
+          
+          const errorMessage = {
+            content: `❌ An error occurred while executing this command: ${error.message}`,
+            ephemeral: true
+          };
+          
+          if (interaction.replied || interaction.deferred) {
+            await interaction.editReply(errorMessage);
+          } else {
+            await interaction.reply(errorMessage);
+          }
+        }
+      } else if (interaction.isButton()) {
+        // Handle button interactions for command menus
+        try {
+          await this.handleButtonInteraction(interaction);
+        } catch (error: any) {
+          console.error('Button interaction error:', error);
+          if (!interaction.replied) {
+            await interaction.reply({ content: '❌ An error occurred.', ephemeral: true });
+          }
         }
       }
     });
@@ -3433,44 +3489,38 @@ export class EnhancedDiscordBot {
     const commandData = Array.from(this.commands.values()).map(command => command.data.toJSON());
     
     try {
+      console.log(`🔄 Registering ${commandData.length} slash commands to guilds...`);
       
-      console.log(`🔄 Registering ${commandData.length} slash commands globally...`);
-      
-      // First clear existing commands to prevent conflicts
-      await rest.put(Routes.applicationCommands(this.client.user!.id), { body: [] });
-      console.log('🧹 Cleared existing commands');
-      
-      // Wait a moment then register new commands
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Register globally (for all guilds) - using the exact method requested by user
+      // Use guild-specific registration for better reliability
+      const guildsArray = Array.from(this.client.guilds.cache.values());
       const clientId = this.client.user!.id;
-      const data = await rest.put(
-            Routes.applicationCommands(clientId),
-            { body: commandData },
-        ) as any[];
       
-      console.log(`✅ Successfully registered ${data.length} slash commands!`);
-      console.log('📝 Commands registered:', commandData.map(cmd => cmd.name).join(', '));
-    } catch (error: any) {
-      console.error('❌ Failed to register commands:', error.message);
-      
-      // Try guild-specific registration as fallback
-      try {
-        console.log('🔄 Attempting guild-specific registration as fallback...');
-        const guildsArray = Array.from(this.client.guilds.cache.values());
-        for (const guild of guildsArray) {
-          const clientId = this.client.user!.id;
-          const restInstance = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN);
-          await restInstance.put(
+      for (const guild of guildsArray) {
+        try {
+          // Clear existing guild commands first
+          await rest.put(Routes.applicationGuildCommands(clientId, guild.id), { body: [] });
+          console.log(`🧹 Cleared existing commands for guild: ${guild.name}`);
+          
+          // Wait briefly then register new commands
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const data = await rest.put(
             Routes.applicationGuildCommands(clientId, guild.id),
             { body: commandData }
-          );
-          console.log(`✅ Registered commands for guild: ${guild.name}`);
+          ) as any[];
+          
+          console.log(`✅ Registered ${data.length} commands for guild: ${guild.name}`);
+        } catch (guildError: any) {
+          console.error(`❌ Failed to register commands for guild ${guild.name}:`, guildError.message);
         }
-      } catch (guildError: any) {
-        console.error('❌ Guild registration also failed:', guildError.message);
       }
+      
+      if (guildsArray.length === 0) {
+        console.log('⚠️ No guilds found to register commands to');
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Command registration failed:', error.message);
     }
   }
 
@@ -3772,6 +3822,72 @@ export class EnhancedDiscordBot {
       .setTimestamp();
     
     return embed;
+  }
+
+  // ============================================================================
+  // BUTTON INTERACTION HANDLERS
+  // ============================================================================
+  
+  private async handleButtonInteraction(interaction: any) {
+    const customId = interaction.customId;
+    
+    if (customId === 'help_mod') {
+      const embed = new EmbedBuilder()
+        .setColor('#ED4245')
+        .setTitle('🛡️ Moderation Commands')
+        .setDescription('Advanced moderation tools for server management')
+        .addFields(
+          { name: '🔨 Basic Commands', value: '`/mod massban` - Ban multiple users\n`/mod cleanup` - Clean messages\n`/mod quarantine` - Remove user roles\n`/clear` - Clear messages\n`/timeout` - Timeout users\n`/warn` - Warn users', inline: false },
+          { name: '⚙️ Auto-Moderation', value: '`/mod automod` - Configure auto-mod\nAnti-spam, anti-links, auto-warnings', inline: false },
+          { name: '🔒 Permissions', value: 'Requires: **Moderate Members** or **Manage Messages**\nBot owner has global access', inline: false }
+        )
+        .setFooter({ text: 'Use /help [command] for detailed usage examples' })
+        .setTimestamp();
+      
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    } else if (customId === 'help_fun') {
+      const embed = new EmbedBuilder()
+        .setColor('#57F287')
+        .setTitle('🎮 Fun & Games Commands')
+        .setDescription('Entertainment and interactive games')
+        .addFields(
+          { name: '🎯 Games', value: '`/blackjack` - Play blackjack\n`/coinflip` - Flip a coin\n`/rps` - Rock Paper Scissors\n`/roll` - Roll dice', inline: false },
+          { name: '😂 Fun Content', value: '`/meme` - Random memes\n`/joke` - Get jokes\n`/dadjoke` - Dad jokes\n`/quote` - Inspirational quotes\n`/fact` - Random facts', inline: false },
+          { name: '🎨 Interactive', value: '`/hug` - Send virtual hugs\n`/chuck` - Chuck Norris facts\n`/catfact` - Cat facts\n`/ascii` - ASCII art', inline: false }
+        )
+        .setFooter({ text: 'All fun commands are available to everyone!' })
+        .setTimestamp();
+      
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    } else if (customId === 'help_music') {
+      const embed = new EmbedBuilder()
+        .setColor('#1DB954')
+        .setTitle('🎵 Music Commands')
+        .setDescription('Advanced music bot with voice functionality')
+        .addFields(
+          { name: '🎧 Basic Controls', value: '`/music join` - Join voice channel\n`/music leave` - Leave voice channel\n`/music play <song>` - Play music\n`/music stop` - Stop and leave', inline: false },
+          { name: '⏯️ Playback', value: '`/music pause` - Pause current song\n`/music resume` - Resume playback\n`/music skip` - Skip current song\n`/music volume <1-100>` - Set volume', inline: false },
+          { name: '📋 Queue Management', value: '`/music queue` - Show queue\n`/music shuffle` - Shuffle queue\n`/music loop` - Toggle loop modes\n`/music nowplaying` - Current song', inline: false }
+        )
+        .setFooter({ text: 'Supports YouTube, Spotify URLs and search queries' })
+        .setTimestamp();
+      
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    } else if (customId === 'help_utility') {
+      const embed = new EmbedBuilder()
+        .setColor('#5865F2')
+        .setTitle('⚙️ Utility Commands')
+        .setDescription('Helpful tools and information commands')
+        .addFields(
+          { name: '🌐 Information', value: '`/weather <location>` - Weather info\n`/news` - Latest headlines\n`/wiki <term>` - Wikipedia search\n`/urban <term>` - Urban Dictionary', inline: false },
+          { name: '🔧 Tools', value: '`/qr <text>` - Generate QR codes\n`/math <expression>` - Calculator\n`/color <hex>` - Color information\n`/password` - Generate passwords', inline: false },
+          { name: '👤 User Info', value: '`/avatar <user>` - User avatars\n`/userinfo <user>` - User details\n`/serverinfo` - Server information\n`/afk <reason>` - Set AFK status', inline: false }
+        )
+        .setFooter({ text: 'Most utility commands work in DMs too!' })
+        .setTimestamp();
+      
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    }
   }
 
   // ============================================================================
