@@ -1609,7 +1609,7 @@ class DiscordBot {
         console.log('✅ Global commands registered successfully');
         
         // Also register for each guild for faster updates
-        for (const guild of this.client.guilds.cache.values()) {
+        for (const guild of Array.from(this.client.guilds.cache.values())) {
           try {
             console.log(`Registering commands for guild: ${guild.name} (${guild.id})`);
             await rest.put(
@@ -1631,7 +1631,7 @@ class DiscordBot {
         console.log('Attempting fallback guild registration...');
         try {
           const commandData = Array.from(this.commands.values()).map(command => command.data.toJSON());
-          for (const guild of this.client.guilds.cache.values()) {
+          for (const guild of Array.from(this.client.guilds.cache.values())) {
             await rest.put(
               Routes.applicationGuildCommands(this.client.user!.id, guild.id),
               { body: commandData }
