@@ -5,74 +5,43 @@
 @tailwind utilities;
 
 :root {
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(210 25% 7.8431%);
-  --card: hsl(180 6.6667% 97.0588%);
-  --card-foreground: hsl(210 25% 7.8431%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(210 25% 7.8431%);
-  --primary: hsl(203.8863 88.2845% 53.1373%);
-  --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(210 25% 7.8431%);
-  --secondary-foreground: hsl(0 0% 100%);
-  --muted: hsl(240 1.9608% 90%);
-  --muted-foreground: hsl(210 25% 7.8431%);
-  --accent: hsl(211.5789 51.3514% 92.7451%);
-  --accent-foreground: hsl(203.8863 88.2845% 53.1373%);
-  --destructive: hsl(356.3033 90.5579% 54.3137%);
+  /* Bleed Bot Theme Colors */
+  --background: hsl(0 0% 7%);
+  --foreground: hsl(0 0% 95%);
+  --card: hsl(0 0% 10%);
+  --card-foreground: hsl(0 0% 95%);
+  --popover: hsl(0 0% 8%);
+  --popover-foreground: hsl(0 0% 95%);
+  --primary: hsl(190 95% 50%);
+  --primary-foreground: hsl(0 0% 7%);
+  --secondary: hsl(0 0% 12%);
+  --secondary-foreground: hsl(0 0% 95%);
+  --muted: hsl(0 0% 15%);
+  --muted-foreground: hsl(0 0% 65%);
+  --accent: hsl(0 0% 12%);
+  --accent-foreground: hsl(190 95% 50%);
+  --destructive: hsl(0 84% 60%);
   --destructive-foreground: hsl(0 0% 100%);
-  --border: hsl(201.4286 30.4348% 90.9804%);
-  --input: hsl(200 23.0769% 97.4510%);
-  --ring: hsl(202.8169 89.1213% 53.1373%);
+  --border: hsl(0 0% 18%);
+  --input: hsl(0 0% 12%);
+  --ring: hsl(190 95% 50%);
 
-  /* Discord Colors */
-  --discord-blurple: hsl(235 85.6% 64.7%);
-  --discord-green: hsl(139 47.3% 43.9%);
-  --discord-dark: hsl(220 13% 18%);
-  --discord-secondary: hsl(223 6.7% 20.6%);
-  --discord-tertiary: hsl(220 7.7% 22.9%);
-  --discord-text: hsl(220 8.9% 46.1%);
-  --discord-white: hsl(0 0% 100%);
-  --discord-pink: hsl(324 65.4% 59.8%);
-  --discord-yellow: hsl(50 94.4% 67.6%);
-  --discord-red: hsl(359 82.6% 59.4%);
+  /* Bleed Bot Specific Colors */
+  --bleed-bg-primary: hsl(0 0% 7%);
+  --bleed-bg-secondary: hsl(0 0% 10%);
+  --bleed-bg-tertiary: hsl(0 0% 12%);
+  --bleed-bg-accent: hsl(0 0% 15%);
+  --bleed-cyan: hsl(190 95% 50%);
+  --bleed-cyan-dark: hsl(190 95% 40%);
+  --bleed-text: hsl(0 0% 95%);
+  --bleed-text-muted: hsl(0 0% 65%);
+  --bleed-text-dim: hsl(0 0% 45%);
+  --bleed-border: hsl(0 0% 18%);
+  --bleed-hover: hsl(0 0% 12%);
 
-  --font-sans: 'Inter', sans-serif;
-  --font-serif: Georgia, serif;
-  --font-mono: Menlo, monospace;
-  --radius: 1.3rem;
-  --shadow-2xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-sm: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-md: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 2px 4px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-lg: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 4px 6px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 8px 10px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --shadow-2xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00);
-  --tracking-normal: 0em;
-  --spacing: 0.25rem;
-}
-
-.dark {
-  --background: hsl(220 13% 18%);
-  --foreground: hsl(220 8.9% 46.1%);
-  --card: hsl(223 6.7% 20.6%);
-  --card-foreground: hsl(0 0% 100%);
-  --popover: hsl(220 13% 18%);
-  --popover-foreground: hsl(220 8.9% 46.1%);
-  --primary: hsl(235 85.6% 64.7%);
-  --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(223 6.7% 20.6%);
-  --secondary-foreground: hsl(0 0% 100%);
-  --muted: hsl(220 7.7% 22.9%);
-  --muted-foreground: hsl(220 8.9% 46.1%);
-  --accent: hsl(220 7.7% 22.9%);
-  --accent-foreground: hsl(235 85.6% 64.7%);
-  --destructive: hsl(359 82.6% 59.4%);
-  --destructive-foreground: hsl(0 0% 100%);
-  --border: hsl(220 7.7% 22.9%);
-  --input: hsl(220 7.7% 22.9%);
-  --ring: hsl(235 85.6% 64.7%);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Inter', sans-serif;
+  --font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  --radius: 0.5rem;
 }
 
 @layer base {
@@ -82,28 +51,23 @@
 
   body {
     @apply font-sans antialiased;
-    background-color: var(--discord-dark);
-    color: var(--discord-white);
+    background-color: var(--bleed-bg-primary);
+    color: var(--bleed-text);
     font-family: var(--font-sans);
   }
 }
 
-/* Discord-specific utility classes */
-.discord-bg-dark { background-color: var(--discord-dark); }
-.discord-bg-secondary { background-color: var(--discord-secondary); }
-.discord-bg-tertiary { background-color: var(--discord-tertiary); }
-.discord-bg-blurple { background-color: var(--discord-blurple); }
-.discord-bg-green { background-color: var(--discord-green); }
-.discord-bg-red { background-color: var(--discord-red); }
-.discord-bg-yellow { background-color: var(--discord-yellow); }
-.discord-bg-pink { background-color: var(--discord-pink); }
+/* Bleed Bot utility classes */
+.bleed-bg-primary { background-color: var(--bleed-bg-primary); }
+.bleed-bg-secondary { background-color: var(--bleed-bg-secondary); }
+.bleed-bg-tertiary { background-color: var(--bleed-bg-tertiary); }
+.bleed-bg-accent { background-color: var(--bleed-bg-accent); }
+.bleed-bg-cyan { background-color: var(--bleed-cyan); }
+.bleed-bg-hover { background-color: var(--bleed-hover); }
 
-.discord-text-white { color: var(--discord-white); }
-.discord-text-muted { color: var(--discord-text); }
-.discord-text-blurple { color: var(--discord-blurple); }
-.discord-text-green { color: var(--discord-green); }
-.discord-text-red { color: var(--discord-red); }
-.discord-text-yellow { color: var(--discord-yellow); }
-.discord-text-pink { color: var(--discord-pink); }
+.bleed-text { color: var(--bleed-text); }
+.bleed-text-muted { color: var(--bleed-text-muted); }
+.bleed-text-dim { color: var(--bleed-text-dim); }
+.bleed-text-cyan { color: var(--bleed-cyan); }
 
-.discord-border { border-color: var(--discord-tertiary); }
+.bleed-border { border-color: var(--bleed-border); }

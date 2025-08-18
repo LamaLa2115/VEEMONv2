@@ -61,17 +61,20 @@ export default {
           border: "var(--sidebar-border)",
           ring: "var(--sidebar-ring)",
         },
-        discord: {
-          blurple: "var(--discord-blurple)",
-          green: "var(--discord-green)",
-          dark: "var(--discord-dark)",
-          secondary: "var(--discord-secondary)",
-          tertiary: "var(--discord-tertiary)",
-          text: "var(--discord-text)",
-          white: "var(--discord-white)",
-          pink: "var(--discord-pink)",
-          yellow: "var(--discord-yellow)",
-          red: "var(--discord-red)",
+        bleed: {
+          bg: {
+            primary: "var(--bleed-bg-primary)",
+            secondary: "var(--bleed-bg-secondary)",
+            tertiary: "var(--bleed-bg-tertiary)",
+            accent: "var(--bleed-bg-accent)",
+            hover: "var(--bleed-hover)"
+          },
+          cyan: "var(--bleed-cyan)",
+          "cyan-dark": "var(--bleed-cyan-dark)",
+          text: "var(--bleed-text)",
+          "text-muted": "var(--bleed-text-muted)",
+          "text-dim": "var(--bleed-text-dim)",
+          border: "var(--bleed-border)"
         },
       },
       fontFamily: {
