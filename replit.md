@@ -20,6 +20,9 @@ Preferred communication style: Simple, everyday language.
   - **Implemented dual command system** supporting both slash commands (/) and prefix commands (,)
   - **Changed bot prefix from "!" to ","** for all servers and future installations
   - Enhanced prefix command parsing to handle complex arguments and subcommands for full feature parity
+  - **Added advanced moderation commands**: purge, lock/unlock channels, slowmode control
+  - **Created comprehensive COMMANDS.md documentation** with usage examples and permission requirements
+  - Bot now supports 35+ commands including all essential moderation, music, utility, and fun features
 
 ## System Architecture
 

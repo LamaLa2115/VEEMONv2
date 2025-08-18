@@ -992,6 +992,211 @@ class DiscordBot {
       }
     };
 
+    // ADDITIONAL MODERATION COMMANDS
+    const purgeCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('purge')
+        .setDescription('Bulk delete messages from the channel')
+        .addIntegerOption((option: any) =>
+          option.setName('amount')
+            .setDescription('Number of messages to delete (1-100)')
+            .setRequired(true)
+            .setMinValue(1)
+            .setMaxValue(100))
+        .addUserOption((option: any) =>
+          option.setName('user')
+            .setDescription('Only delete messages from this user'))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+      execute: async (interaction) => {
+        const amount = interaction.options.getInteger('amount');
+        const targetUser = interaction.options.getUser('user');
+        
+        try {
+          const channel = interaction.channel as TextChannel;
+          
+          if (targetUser) {
+            // Fetch messages and filter by user
+            const messages = await channel.messages.fetch({ limit: Math.min(amount * 2, 100) });
+            const userMessages = messages.filter(msg => msg.author.id === targetUser.id).first(amount);
+            
+            if (userMessages.length === 0) {
+              await interaction.reply({ content: `No messages found from ${targetUser.tag}`, ephemeral: true });
+              return;
+            }
+            
+            await channel.bulkDelete(userMessages);
+            await interaction.reply({ content: `🗑️ Deleted ${userMessages.length} messages from ${targetUser.tag}`, ephemeral: true });
+          } else {
+            // Delete last X messages
+            const messages = await channel.messages.fetch({ limit: amount });
+            await channel.bulkDelete(messages);
+            await interaction.reply({ content: `🗑️ Deleted ${messages.size} messages`, ephemeral: true });
+          }
+          
+          // Log the action
+          await storage.createModerationLog({
+            serverId: interaction.guild.id,
+            action: 'purge',
+            targetUserId: targetUser?.id || 'bulk',
+            targetUsername: targetUser?.tag || 'bulk',
+            moderatorId: interaction.user.id,
+            moderatorUsername: interaction.user.tag,
+            reason: `Purged ${amount} messages${targetUser ? ` from ${targetUser.tag}` : ''}`,
+          });
+          
+          await storage.incrementModerationAction(interaction.guild.id);
+        } catch (error) {
+          await interaction.reply({ content: '❌ Failed to delete messages. Make sure they are less than 14 days old.', ephemeral: true });
+        }
+      }
+    };
+
+    const lockCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('lock')
+        .setDescription('Lock a channel to prevent users from sending messages')
+        .addChannelOption((option: any) =>
+          option.setName('channel')
+            .setDescription('Channel to lock (defaults to current)')
+            .addChannelTypes(ChannelType.GuildText))
+        .addStringOption((option: any) =>
+          option.setName('reason')
+            .setDescription('Reason for locking the channel'))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+      execute: async (interaction) => {
+        const channel = interaction.options.getChannel('channel') as TextChannel || interaction.channel as TextChannel;
+        const reason = interaction.options.getString('reason') || 'No reason provided';
+        
+        try {
+          // Remove SEND_MESSAGES permission for @everyone
+          await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, {
+            SendMessages: false,
+          });
+          
+          const embed = new EmbedBuilder()
+            .setColor('#ED4245')
+            .setTitle('🔒 Channel Locked')
+            .setDescription(`This channel has been locked by ${interaction.user.tag}`)
+            .addFields({ name: 'Reason', value: reason })
+            .setTimestamp();
+          
+          await channel.send({ embeds: [embed] });
+          await interaction.reply({ content: `🔒 Locked ${channel} successfully`, ephemeral: true });
+          
+          // Log the action
+          await storage.createModerationLog({
+            serverId: interaction.guild.id,
+            action: 'lock',
+            targetUserId: channel.id,
+            targetUsername: channel.name,
+            moderatorId: interaction.user.id,
+            moderatorUsername: interaction.user.tag,
+            reason: `Locked ${channel.name}: ${reason}`,
+          });
+          
+          await storage.incrementModerationAction(interaction.guild.id);
+        } catch (error) {
+          await interaction.reply({ content: '❌ Failed to lock the channel. Check bot permissions.', ephemeral: true });
+        }
+      }
+    };
+
+    const unlockCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('unlock')
+        .setDescription('Unlock a previously locked channel')
+        .addChannelOption((option: any) =>
+          option.setName('channel')
+            .setDescription('Channel to unlock (defaults to current)')
+            .addChannelTypes(ChannelType.GuildText))
+        .addStringOption((option: any) =>
+          option.setName('reason')
+            .setDescription('Reason for unlocking the channel'))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+      execute: async (interaction) => {
+        const channel = interaction.options.getChannel('channel') as TextChannel || interaction.channel as TextChannel;
+        const reason = interaction.options.getString('reason') || 'No reason provided';
+        
+        try {
+          // Remove the SEND_MESSAGES override for @everyone (restore to default)
+          await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, {
+            SendMessages: null,
+          });
+          
+          const embed = new EmbedBuilder()
+            .setColor('#57F287')
+            .setTitle('🔓 Channel Unlocked')
+            .setDescription(`This channel has been unlocked by ${interaction.user.tag}`)
+            .addFields({ name: 'Reason', value: reason })
+            .setTimestamp();
+          
+          await channel.send({ embeds: [embed] });
+          await interaction.reply({ content: `🔓 Unlocked ${channel} successfully`, ephemeral: true });
+          
+          // Log the action
+          await storage.createModerationLog({
+            serverId: interaction.guild.id,
+            action: 'unlock',
+            targetUserId: channel.id,
+            targetUsername: channel.name,
+            moderatorId: interaction.user.id,
+            moderatorUsername: interaction.user.tag,
+            reason: `Unlocked ${channel.name}: ${reason}`,
+          });
+          
+          await storage.incrementModerationAction(interaction.guild.id);
+        } catch (error) {
+          await interaction.reply({ content: '❌ Failed to unlock the channel. Check bot permissions.', ephemeral: true });
+        }
+      }
+    };
+
+    const slowmodeCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('slowmode')
+        .setDescription('Set slowmode delay for the channel')
+        .addIntegerOption((option: any) =>
+          option.setName('seconds')
+            .setDescription('Slowmode delay in seconds (0 to disable, max 21600)')
+            .setRequired(true)
+            .setMinValue(0)
+            .setMaxValue(21600))
+        .addChannelOption((option: any) =>
+          option.setName('channel')
+            .setDescription('Channel to apply slowmode to (defaults to current)')
+            .addChannelTypes(ChannelType.GuildText))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+      execute: async (interaction) => {
+        const seconds = interaction.options.getInteger('seconds');
+        const channel = interaction.options.getChannel('channel') as TextChannel || interaction.channel as TextChannel;
+        
+        try {
+          await channel.setRateLimitPerUser(seconds);
+          
+          if (seconds === 0) {
+            await interaction.reply(`🔓 Slowmode disabled in ${channel}`);
+          } else {
+            await interaction.reply(`🐌 Slowmode set to ${seconds} seconds in ${channel}`);
+          }
+          
+          // Log the action
+          await storage.createModerationLog({
+            serverId: interaction.guild.id,
+            action: 'slowmode',
+            targetUserId: channel.id,
+            targetUsername: channel.name,
+            moderatorId: interaction.user.id,
+            moderatorUsername: interaction.user.tag,
+            reason: `Set slowmode to ${seconds} seconds in ${channel.name}`,
+          });
+          
+          await storage.incrementModerationAction(interaction.guild.id);
+        } catch (error) {
+          await interaction.reply({ content: '❌ Failed to set slowmode. Check bot permissions.', ephemeral: true });
+        }
+      }
+    };
+
     // Last.fm Integration Commands
     const lastfmSetCommand: Command = {
       data: new SlashCommandBuilder()
@@ -1192,6 +1397,10 @@ class DiscordBot {
     this.commands.set('bumpreminder', bumpCommand);
     this.commands.set('counters', countersCommand);
     this.commands.set('lastfm', lastfmSetCommand);
+    this.commands.set('purge', purgeCommand);
+    this.commands.set('lock', lockCommand);
+    this.commands.set('unlock', unlockCommand);
+    this.commands.set('slowmode', slowmodeCommand);
   }
 
   private setupEventListeners() {
