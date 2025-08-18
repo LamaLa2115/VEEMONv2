@@ -2101,6 +2101,81 @@ export class EnhancedDiscordBot {
       }
     });
 
+    // Handle prefix commands and messages
+    this.client.on('messageCreate', async (message) => {
+      if (message.author.bot) return;
+      
+      // Get server prefix (default is comma)
+      const prefix = config.DEFAULT_PREFIX;
+      
+      if (!message.content.startsWith(prefix)) return;
+      
+      const args = message.content.slice(prefix.length).trim().split(/ +/);
+      const commandName = args.shift()?.toLowerCase();
+      
+      if (!commandName) return;
+      
+      // Check if it's a slash command that can be run as prefix
+      const command = this.commands.get(commandName);
+      if (!command) {
+        // Check for custom commands
+        try {
+          const customCommands = await storage.getCustomCommands(message.guildId || '');
+          const customCommand = customCommands.find(cmd => cmd.name === commandName);
+          if (customCommand) {
+            await message.reply(customCommand.response);
+            return;
+          }
+        } catch (error) {
+          // Custom commands not available, continue
+        }
+        return;
+      }
+
+      try {
+        // Create a mock interaction object for prefix commands
+        const mockInteraction = {
+          commandName,
+          user: message.author,
+          member: message.member,
+          guild: message.guild,
+          guildId: message.guildId,
+          channel: message.channel,
+          channelId: message.channelId,
+          options: {
+            getString: (name: string) => args[0] || null,
+            getInteger: (name: string) => parseInt(args[0]) || null,
+            getBoolean: (name: string) => args[0]?.toLowerCase() === 'true' || false,
+            getUser: (name: string) => message.mentions.users.first() || null,
+            getChannel: (name: string) => message.mentions.channels.first() || null,
+            getRole: (name: string) => message.mentions.roles.first() || null,
+          },
+          reply: async (content: any) => {
+            if (typeof content === 'string') {
+              return await message.reply(content);
+            } else {
+              return await message.reply(content);
+            }
+          },
+          editReply: async (content: any) => {
+            return await message.reply(content);
+          },
+          deferReply: async () => {
+            // For prefix commands, we don't need to defer
+            return Promise.resolve();
+          },
+          replied: false,
+          deferred: false,
+        };
+
+        await command.execute(mockInteraction);
+        await storage.incrementCommandUsed(message.guildId || 'DM');
+      } catch (error: any) {
+        console.error('Prefix command execution error:', error);
+        await message.reply(`❌ An error occurred while executing this command: ${error.message}`);
+      }
+    });
+
     // Voice state updates for music functionality
     this.client.on('voiceStateUpdate', (oldState, newState) => {
       // Handle user leaving voice channel - pause music if no one is listening
