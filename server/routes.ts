@@ -54,6 +54,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Manual slash command refresh endpoint
+  // Execute Discord command via API
+  app.post("/api/bot/execute-command", async (req, res) => {
+    try {
+      const { command, parameters } = req.body;
+      
+      if (!command) {
+        return res.status(400).json({ message: "Command is required" });
+      }
+
+      // For now, just return a success response since we can't directly execute Discord commands
+      // In a real implementation, you would need to implement command execution logic
+      res.json({
+        message: `Command /${command} would be executed`,
+        command,
+        parameters,
+        status: "simulated"
+      });
+    } catch (error: any) {
+      console.error('Command execution failed:', error);
+      res.status(500).json({ message: "Failed to execute command", error: error?.message || 'Unknown error' });
+    }
+  });
+
   app.post("/api/bot/refresh-commands", async (req, res) => {
     try {
       const client = discordBot.getClient();

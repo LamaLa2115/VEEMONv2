@@ -41,14 +41,7 @@ export class EnhancedDiscordBot {
 
   constructor() {
     this.client = new Client({
-      intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildMessageReactions,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers,
-      ],
+      intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
     });
     
     this.commands = new Collection();
@@ -70,7 +63,7 @@ export class EnhancedDiscordBot {
     return interaction.member?.permissions?.has(requiredPermission) || false;
   }
 
-  private checkCooldown(userId: string, commandName: string, cooldownTime: number): boolean {
+  private checkCooldown(userId: string, commandName: string, cooldownTime: number): number | false {
     if (this.isSuperAdmin(userId)) return false;
     
     if (!this.cooldowns.has(commandName)) {
@@ -2737,11 +2730,12 @@ export class EnhancedDiscordBot {
       // Wait a moment then register new commands
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Register globally (for all guilds)
+      // Register globally (for all guilds) - using the exact method requested by user
+      const clientId = this.client.user!.id;
       const data = await rest.put(
-        Routes.applicationCommands(this.client.user!.id),
-        { body: commandData }
-      ) as any[];
+            Routes.applicationCommands(clientId),
+            { body: commandData },
+        );
       
       console.log(`✅ Successfully registered ${data.length} slash commands!`);
       console.log('📝 Commands registered:', commandData.map(cmd => cmd.name).join(', '));
@@ -2752,8 +2746,9 @@ export class EnhancedDiscordBot {
       try {
         console.log('🔄 Attempting guild-specific registration as fallback...');
         for (const guild of this.client.guilds.cache.values()) {
+          const clientId = this.client.user!.id;
           await rest.put(
-            Routes.applicationGuildCommands(this.client.user!.id, guild.id),
+            Routes.applicationGuildCommands(clientId, guild.id),
             { body: commandData }
           );
           console.log(`✅ Registered commands for guild: ${guild.name}`);
