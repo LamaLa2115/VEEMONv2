@@ -1439,7 +1439,7 @@ class DiscordBot {
     const reloadCommand: Command = {
       data: new SlashCommandBuilder()
         .setName('reload')
-        .setDescription('Reload the bot (Owner only)')
+        .setDescription('Completely restart the bot (Admin only)')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
       execute: async (interaction) => {
         // Check if user is bot owner or has admin permissions
@@ -1448,22 +1448,27 @@ class DiscordBot {
           return;
         }
         
-        await interaction.reply({ content: '🔄 Reloading bot... This may take a moment.', ephemeral: true });
+        await interaction.reply({ content: '🔄 Restarting bot completely... Bot will be back online shortly.', ephemeral: true });
         
-        console.log(`Bot reload requested by ${interaction.user.username} (${interaction.user.id})`);
+        console.log(`Bot restart requested by ${interaction.user.username} (${interaction.user.id})`);
+        console.log('Initiating complete bot restart...');
         
-        // Gracefully disconnect and restart
+        // Force complete restart
         setTimeout(async () => {
           try {
+            // Destroy the Discord client connection
             await this.client.destroy();
-            console.log('Bot disconnected for reload');
-            // Exit process - the process manager (like nodemon/tsx) will restart it
+            console.log('Discord client destroyed');
+            
+            // Force exit the process - this will trigger a complete restart
+            // The process manager (tsx/nodemon) will automatically restart the bot
             process.exit(0);
           } catch (error) {
-            console.error('Error during bot reload:', error);
+            console.error('Error during bot restart:', error);
+            // Force exit even if there's an error
             process.exit(1);
           }
-        }, 1000);
+        }, 500); // Shorter delay for faster restart
       }
     };
     

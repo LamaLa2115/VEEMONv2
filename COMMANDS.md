@@ -258,10 +258,10 @@ The bot supports two command formats:
 - Node.js version
 
 ### `/reload` or `,reload`
-**Description**: Restart the entire bot (Admin only)
+**Description**: Completely restart the bot (Admin only)
 **Usage**: `/reload`
 **Permissions**: Administrator
-**Note**: This command completely restarts the bot process. Use with caution as it will temporarily disconnect the bot.
+**Note**: This command forces a complete bot restart by terminating and restarting the entire process. The bot will be offline for a few seconds while restarting.
 
 ---
 
