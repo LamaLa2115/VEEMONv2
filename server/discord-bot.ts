@@ -31,6 +31,7 @@ class DiscordBot {
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessageReactions,
+        // GatewayIntentBits.MessageContent, // Enable this in Discord Developer Portal first
       ],
     });
     
@@ -991,6 +992,172 @@ class DiscordBot {
       }
     };
 
+    // Last.fm Integration Commands
+    const lastfmSetCommand: Command = {
+      data: new SlashCommandBuilder()
+        .setName('lastfm')
+        .setDescription('Last.fm integration commands')
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('set')
+            .setDescription('Set your Last.fm username')
+            .addStringOption((option: any) =>
+              option.setName('username')
+                .setDescription('Your Last.fm username')
+                .setRequired(true)))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('nowplaying')
+            .setDescription('Show what you\'re currently listening to'))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('recent')
+            .setDescription('Show your recent tracks'))
+        .addSubcommand((subcommand: any) =>
+          subcommand
+            .setName('top')
+            .setDescription('Show your top artists')),
+      execute: async (interaction) => {
+        const subcommand = interaction.options.getSubcommand();
+        
+        if (subcommand === 'set') {
+          const username = interaction.options.getString('username');
+          await storage.updateServer(interaction.guild.id, { lastfmUsername: username });
+          await interaction.reply(`✅ Set Last.fm username to **${username}**`);
+          await storage.incrementCommandUsed(interaction.guild.id);
+        }
+        
+        else if (subcommand === 'nowplaying') {
+          const server = await storage.getServer(interaction.guild.id);
+          if (!server?.lastfmUsername) {
+            await interaction.reply('❌ No Last.fm username set! Use `/lastfm set <username>` first.');
+            return;
+          }
+          
+          try {
+            const response = await axios.get(`https://ws.audioscrobbler.com/2.0/`, {
+              params: {
+                method: 'user.getrecenttracks',
+                user: server.lastfmUsername,
+                api_key: this.lastfmApiKey,
+                format: 'json',
+                limit: 1
+              }
+            });
+            
+            const track = response.data.recenttracks?.track?.[0];
+            if (!track) {
+              await interaction.reply('❌ No recent tracks found.');
+              return;
+            }
+            
+            const embed = new EmbedBuilder()
+              .setColor('#D51007')
+              .setTitle('🎵 Now Playing')
+              .setDescription(`**${track.name}**\nby ${track.artist['#text']}\n${track.album ? `from *${track.album['#text']}*` : ''}`)
+              .setThumbnail(track.image && track.image[3] ? track.image[3]['#text'] : null)
+              .setFooter({ text: `Last.fm • ${server.lastfmUsername}` })
+              .setTimestamp();
+              
+            if (track['@attr']?.nowplaying) {
+              embed.setDescription(`🔴 **Currently Playing**\n\n**${track.name}**\nby ${track.artist['#text']}\n${track.album ? `from *${track.album['#text']}*` : ''}`);
+            }
+            
+            await interaction.reply({ embeds: [embed] });
+          } catch (error) {
+            await interaction.reply('❌ Error fetching Last.fm data. Check if the username is correct.');
+          }
+          await storage.incrementCommandUsed(interaction.guild.id);
+        }
+        
+        else if (subcommand === 'recent') {
+          const server = await storage.getServer(interaction.guild.id);
+          if (!server?.lastfmUsername) {
+            await interaction.reply('❌ No Last.fm username set! Use `/lastfm set <username>` first.');
+            return;
+          }
+          
+          try {
+            const response = await axios.get(`https://ws.audioscrobbler.com/2.0/`, {
+              params: {
+                method: 'user.getrecenttracks',
+                user: server.lastfmUsername,
+                api_key: this.lastfmApiKey,
+                format: 'json',
+                limit: 10
+              }
+            });
+            
+            const tracks = response.data.recenttracks?.track || [];
+            if (tracks.length === 0) {
+              await interaction.reply('❌ No recent tracks found.');
+              return;
+            }
+            
+            const trackList = tracks.map((track: any, index: number) => {
+              const nowPlaying = track['@attr']?.nowplaying ? '🔴 ' : '';
+              return `${nowPlaying}**${index + 1}.** ${track.name} - ${track.artist['#text']}`;
+            }).join('\n');
+            
+            const embed = new EmbedBuilder()
+              .setColor('#D51007')
+              .setTitle('🎶 Recent Tracks')
+              .setDescription(trackList)
+              .setFooter({ text: `Last.fm • ${server.lastfmUsername}` })
+              .setTimestamp();
+            
+            await interaction.reply({ embeds: [embed] });
+          } catch (error) {
+            await interaction.reply('❌ Error fetching Last.fm data. Check if the username is correct.');
+          }
+          await storage.incrementCommandUsed(interaction.guild.id);
+        }
+        
+        else if (subcommand === 'top') {
+          const server = await storage.getServer(interaction.guild.id);
+          if (!server?.lastfmUsername) {
+            await interaction.reply('❌ No Last.fm username set! Use `/lastfm set <username>` first.');
+            return;
+          }
+          
+          try {
+            const response = await axios.get(`https://ws.audioscrobbler.com/2.0/`, {
+              params: {
+                method: 'user.gettopartists',
+                user: server.lastfmUsername,
+                api_key: this.lastfmApiKey,
+                format: 'json',
+                period: '7day',
+                limit: 10
+              }
+            });
+            
+            const artists = response.data.topartists?.artist || [];
+            if (artists.length === 0) {
+              await interaction.reply('❌ No top artists found.');
+              return;
+            }
+            
+            const artistList = artists.map((artist: any, index: number) => {
+              return `**${index + 1}.** ${artist.name} (${artist.playcount} plays)`;
+            }).join('\n');
+            
+            const embed = new EmbedBuilder()
+              .setColor('#D51007')
+              .setTitle('🎤 Top Artists (Past 7 Days)')
+              .setDescription(artistList)
+              .setFooter({ text: `Last.fm • ${server.lastfmUsername}` })
+              .setTimestamp();
+            
+            await interaction.reply({ embeds: [embed] });
+          } catch (error) {
+            await interaction.reply('❌ Error fetching Last.fm data. Check if the username is correct.');
+          }
+          await storage.incrementCommandUsed(interaction.guild.id);
+        }
+      }
+    };
+
     // Add all commands to collection
     this.commands.set('kick', kickCommand);
     this.commands.set('ban', banCommand);
@@ -1024,6 +1191,7 @@ class DiscordBot {
     this.commands.set('level', levelCommand);
     this.commands.set('bumpreminder', bumpCommand);
     this.commands.set('counters', countersCommand);
+    this.commands.set('lastfm', lastfmSetCommand);
   }
 
   private setupEventListeners() {
@@ -1142,11 +1310,23 @@ class DiscordBot {
         }
       });
 
-      // Handle custom commands (prefix-based)
+      // Handle both custom commands and bot commands (prefix-based)
       const server = await storage.getServer(message.guild!.id);
       const prefix = (server?.prefix ?? '!');
       if (message.content.startsWith(prefix)) {
-        const commandName = message.content.slice(prefix.length).trim().split(' ')[0].toLowerCase();
+        const args = message.content.slice(prefix.length).trim().split(/ +/);
+        const commandName = args.shift()?.toLowerCase();
+        
+        if (!commandName) return;
+
+        // Check for built-in commands first
+        if (this.commands.has(commandName)) {
+          await this.handlePrefixCommand(message, commandName, args);
+          await storage.incrementCommandUsed(message.guild!.id);
+          return;
+        }
+
+        // Check for custom commands
         const customCommands = await storage.getCustomCommands(message.guild!.id);
         const customCommand = customCommands.find(cmd => cmd.name === commandName);
         if (customCommand) {
@@ -1252,6 +1432,91 @@ class DiscordBot {
       const embed = new EmbedBuilder().setColor(color).setDescription(message).setTimestamp();
       await ch.send({ embeds: [embed] });
     } catch {}
+  }
+
+  private async handlePrefixCommand(message: Message, commandName: string, args: string[]) {
+    try {
+      // Create a mock interaction object for prefix commands
+      const mockInteraction = {
+        guild: message.guild,
+        user: message.author,
+        member: message.member,
+        channel: message.channel,
+        replied: false,
+        deferred: false,
+        commandName,
+        reply: async (options: any) => {
+          if (typeof options === 'string') {
+            return await message.reply(options);
+          }
+          return await message.reply(options);
+        },
+        followUp: async (options: any) => {
+          if (typeof options === 'string') {
+            return await message.channel.send(options);
+          }
+          return await message.channel.send(options);
+        },
+        options: {
+          getUser: (name: string) => {
+            const mention = args.find(arg => arg.startsWith('<@') && arg.endsWith('>'));
+            if (mention && name === 'user') {
+              const userId = mention.replace(/[<@!>]/g, '');
+              return message.guild?.members.cache.get(userId)?.user || null;
+            }
+            return null;
+          },
+          getString: (name: string) => {
+            if (name === 'reason' && args.length > 1) {
+              return args.slice(1).join(' ') || null;
+            }
+            if (name === 'prefix' && args[0]) {
+              return args[0];
+            }
+            if (name === 'name' && args[0]) {
+              return args[0];
+            }
+            if (name === 'response' && args.length > 1) {
+              return args.slice(1).join(' ') || null;
+            }
+            if (name === 'username' && args[0]) {
+              return args[0];
+            }
+            return args[0] || null;
+          },
+          getInteger: (name: string) => {
+            if (name === 'amount' && args[0]) {
+              const num = parseInt(args[0]);
+              return !isNaN(num) ? num : null;
+            }
+            if (name === 'duration' && args[1]) {
+              const num = parseInt(args[1]);
+              return !isNaN(num) ? num : null;
+            }
+            return null;
+          },
+          getSubcommand: () => {
+            return args[0] || null;
+          },
+          getChannel: (name: string) => {
+            const mention = args.find(arg => arg.startsWith('<#') && arg.endsWith('>'));
+            if (mention && name === 'channel') {
+              const channelId = mention.replace(/[<#>]/g, '');
+              return message.guild?.channels.cache.get(channelId) || null;
+            }
+            return null;
+          }
+        }
+      };
+
+      const command = this.commands.get(commandName);
+      if (command) {
+        await command.execute(mockInteraction);
+      }
+    } catch (error) {
+      console.error('Error executing prefix command:', error);
+      await message.reply('There was an error executing this command!');
+    }
   }
 
   public async start() {
