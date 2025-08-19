@@ -4695,12 +4695,15 @@ export class EnhancedDiscordBot {
         break;
       // Message logging buttons
       case 'msg_logging_enable':
+      case 'message_logging_enable':
         await this.toggleMessageLogging(interaction, true);
         break;
       case 'msg_logging_disable':
+      case 'message_logging_disable':
         await this.toggleMessageLogging(interaction, false);
         break;
       case 'msg_logging_channel':
+      case 'message_logging_channel':
         await this.promptChannelSelection(interaction, 'message');
         break;
       // Voice logging buttons
@@ -4729,6 +4732,41 @@ export class EnhancedDiscordBot {
         break;
       case 'mod_logging_disable':
         await this.toggleModerationLogging(interaction, false);
+        break;
+      case 'mod_logging_channel':
+        await this.promptChannelSelection(interaction, 'moderation');
+        break;
+      // Audit logging buttons
+      case 'audit_logging_enable':
+        await this.toggleAuditLogging(interaction, true);
+        break;
+      case 'audit_logging_disable':
+        await this.toggleAuditLogging(interaction, false);
+        break;
+      case 'audit_logging_channel':
+        await this.promptChannelSelection(interaction, 'audit');
+        break;
+      // Channel setup buttons
+      case 'set_msg_channel':
+        await this.promptChannelSelection(interaction, 'message');
+        break;
+      case 'set_voice_channel':
+        await this.promptChannelSelection(interaction, 'voice');
+        break;
+      case 'set_member_channel':
+        await this.promptChannelSelection(interaction, 'member');
+        break;
+      case 'set_mod_channel':
+        await this.promptChannelSelection(interaction, 'moderation');
+        break;
+      case 'set_audit_channel':
+        await this.promptChannelSelection(interaction, 'audit');
+        break;
+      case 'create_all_channels':
+        await this.createAllLoggingChannels(interaction);
+        break;
+      case 'confirm_create_channels':
+        await this.executeChannelCreation(interaction);
         break;
       case 'mod_logging_channel':
         await this.promptChannelSelection(interaction, 'moderation');
@@ -5224,6 +5262,61 @@ export class EnhancedDiscordBot {
       );
       
     await interaction.reply({ embeds: [embed], components: [buttons], flags: MessageFlags.Ephemeral });
+  }
+
+  private async executeChannelCreation(interaction: any) {
+    try {
+      await interaction.deferReply({ ephemeral: true });
+      
+      const guild = interaction.guild;
+      const channelsToCreate = [
+        { name: 'message-logs', type: 'message' },
+        { name: 'voice-logs', type: 'voice' },
+        { name: 'member-logs', type: 'member' },
+        { name: 'mod-logs', type: 'moderation' },
+        { name: 'audit-logs', type: 'audit' }
+      ];
+      
+      const createdChannels = [];
+      
+      for (const channelConfig of channelsToCreate) {
+        try {
+          const channel = await guild.channels.create({
+            name: channelConfig.name,
+            type: ChannelType.GuildText,
+            topic: `Automated ${channelConfig.type} logging channel`,
+            permissionOverwrites: [
+              {
+                id: guild.roles.everyone.id,
+                deny: ['ViewChannel']
+              },
+              {
+                id: interaction.guild.members.me.id,
+                allow: ['ViewChannel', 'SendMessages', 'EmbedLinks']
+              }
+            ]
+          });
+          createdChannels.push(`<#${channel.id}>`);
+        } catch (error: any) {
+          console.error(`Failed to create ${channelConfig.name}:`, error.message);
+        }
+      }
+      
+      const embed = new EmbedBuilder()
+        .setColor('#57F287')
+        .setTitle('✅ Logging Channels Created')
+        .setDescription(`Successfully created ${createdChannels.length} logging channels:`)
+        .addFields(
+          { name: '📁 Created Channels', value: createdChannels.join('\n') || 'No channels created', inline: false },
+          { name: '⚙️ Next Steps', value: 'Channels are ready! Use `/logging dashboard` to configure individual logging features.', inline: false }
+        )
+        .setTimestamp();
+        
+      await interaction.editReply({ embeds: [embed] });
+      
+    } catch (error: any) {
+      await interaction.editReply({ content: `❌ Failed to create channels: ${error.message}` });
+    }
   }
 
   // ============================================================================
