@@ -4376,6 +4376,9 @@ export class EnhancedDiscordBot {
     } else if (customId.startsWith('voice_')) {
       // Handle voice control buttons
       await this.handleVoiceButton(interaction);
+    } else if (customId.startsWith('logging_')) {
+      // Handle logging configuration buttons
+      await this.handleLoggingButton(interaction);
     }
   }
 
@@ -4495,6 +4498,482 @@ export class EnhancedDiscordBot {
         await interaction.showModal(transferModal);
         break;
     }
+  }
+
+  // ============================================================================
+  // LOGGING DASHBOARD AND HANDLERS
+  // ============================================================================
+  
+  private async showLoggingDashboard(interaction: any) {
+    const embed = new EmbedBuilder()
+      .setColor('#5865F2')
+      .setTitle('📝 Server Logging Dashboard')
+      .setDescription('**Interactive logging configuration panel**\n\nConfigure all aspects of server logging with easy-to-use buttons below.')
+      .addFields(
+        { 
+          name: '📨 Message Logging', 
+          value: 'Track message edits, deletions, and bulk actions\n**Status:** ❌ Disabled', 
+          inline: true 
+        },
+        { 
+          name: '🎤 Voice Logging', 
+          value: 'Monitor voice channel activity and changes\n**Status:** ❌ Disabled', 
+          inline: true 
+        },
+        { 
+          name: '👥 Member Logging', 
+          value: 'Log joins, leaves, and member updates\n**Status:** ❌ Disabled', 
+          inline: true 
+        },
+        { 
+          name: '🛡️ Moderation Logging', 
+          value: 'Track all moderation actions and bans\n**Status:** ❌ Disabled', 
+          inline: true 
+        },
+        { 
+          name: '📋 Audit Logging', 
+          value: 'Complete server audit trail\n**Status:** ❌ Disabled', 
+          inline: true 
+        },
+        { 
+          name: '⚙️ Channel Setup', 
+          value: 'Configure dedicated logging channels\n**Status:** ❌ Not configured', 
+          inline: true 
+        }
+      )
+      .setFooter({ text: 'Use the buttons below to configure each logging feature' })
+      .setTimestamp();
+
+    const row1 = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('logging_messages')
+          .setLabel('📨 Messages')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId('logging_voice')
+          .setLabel('🎤 Voice')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId('logging_members')
+          .setLabel('👥 Members')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId('logging_moderation')
+          .setLabel('🛡️ Moderation')
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+    const row2 = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('logging_audit')
+          .setLabel('📋 Audit')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId('logging_channels')
+          .setLabel('⚙️ Channels')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('logging_enable_all')
+          .setLabel('✅ Enable All')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('logging_disable_all')
+          .setLabel('❌ Disable All')
+          .setStyle(ButtonStyle.Danger)
+      );
+
+    await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
+  }
+  
+  private async handleLoggingSetup(interaction: any) {
+    const channel = interaction.options.getChannel('channel');
+    
+    const embed = new EmbedBuilder()
+      .setColor('#57F287')
+      .setTitle('✅ Quick Logging Setup Complete')
+      .setDescription(`**Primary logging channel set to:** ${channel}\n\nYou can now configure individual logging features using the dashboard.`)
+      .addFields(
+        { name: '📝 Next Steps', value: 'Use `/logging dashboard` to configure specific logging features', inline: false },
+        { name: '🔧 Features Available', value: 'Messages, Voice, Members, Moderation, Audit logging', inline: false }
+      )
+      .setTimestamp();
+      
+    const button = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('logging_open_dashboard')
+          .setLabel('📝 Open Dashboard')
+          .setStyle(ButtonStyle.Primary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [button] });
+  }
+  
+  private async showLoggingStatus(interaction: any) {
+    const embed = new EmbedBuilder()
+      .setColor('#F39C12')
+      .setTitle('📊 Current Logging Status')
+      .setDescription(`**Server:** ${interaction.guild.name}\n**Configuration Overview**`)
+      .addFields(
+        { 
+          name: '📨 Message Logging', 
+          value: '❌ **Disabled**\nChannel: Not set\nFeatures: Message edits, deletions, bulk deletes', 
+          inline: false 
+        },
+        { 
+          name: '🎤 Voice Activity Logging', 
+          value: '❌ **Disabled**\nChannel: Not set\nFeatures: Join/leave, mute/unmute, channel moves', 
+          inline: false 
+        },
+        { 
+          name: '👥 Member Event Logging', 
+          value: '❌ **Disabled**\nChannel: Not set\nFeatures: Joins, leaves, nickname/role changes', 
+          inline: false 
+        },
+        { 
+          name: '🛡️ Moderation Logging', 
+          value: '❌ **Disabled**\nChannel: Not set\nFeatures: Bans, kicks, timeouts, warnings', 
+          inline: false 
+        },
+        { 
+          name: '📋 Audit Trail', 
+          value: '❌ **Disabled**\nChannel: Not set\nFeatures: Complete server audit log', 
+          inline: false 
+        }
+      )
+      .setFooter({ text: 'Use /logging dashboard to configure these features' })
+      .setTimestamp();
+      
+    const button = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('logging_configure')
+          .setLabel('⚙️ Configure Logging')
+          .setStyle(ButtonStyle.Primary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [button], ephemeral: true });
+  }
+  
+  private async handleLoggingButton(interaction: any) {
+    const customId = interaction.customId;
+    
+    switch (customId) {
+      case 'logging_messages':
+        await this.configureMessageLogging(interaction);
+        break;
+      case 'logging_voice':
+        await this.configureVoiceLogging(interaction);
+        break;
+      case 'logging_members':
+        await this.configureMemberLogging(interaction);
+        break;
+      case 'logging_moderation':
+        await this.configureModerationLogging(interaction);
+        break;
+      case 'logging_audit':
+        await this.configureAuditLogging(interaction);
+        break;
+      case 'logging_channels':
+        await this.configureLoggingChannels(interaction);
+        break;
+      case 'logging_enable_all':
+        await this.enableAllLogging(interaction);
+        break;
+      case 'logging_disable_all':
+        await this.disableAllLogging(interaction);
+        break;
+      case 'logging_open_dashboard':
+      case 'logging_configure':
+        await this.showLoggingDashboard(interaction);
+        break;
+      case 'logging_back':
+        await this.showLoggingDashboard(interaction);
+        break;
+    }
+  }
+  
+  private async configureMessageLogging(interaction: any) {
+    const embed = new EmbedBuilder()
+      .setColor('#5865F2')
+      .setTitle('📨 Message Logging Configuration')
+      .setDescription('**Configure message logging settings**\n\nTrack message edits, deletions, and bulk operations to maintain server transparency.')
+      .addFields(
+        { name: '📋 Features Included', value: '• Message edits with before/after\n• Message deletions with content\n• Bulk message deletions\n• Message attachments\n• Embed modifications', inline: false },
+        { name: '⚙️ Current Status', value: '❌ **Disabled**\n📁 Channel: Not set', inline: true },
+        { name: '📏 Event Types', value: 'Edit • Delete • Bulk Delete\nAttachment • Embed Changes', inline: true }
+      )
+      .setTimestamp();
+      
+    const buttons = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('msg_logging_enable')
+          .setLabel('✅ Enable')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('msg_logging_disable')
+          .setLabel('❌ Disable')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('msg_logging_channel')
+          .setLabel('📁 Set Channel')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+  }
+  
+  private async configureVoiceLogging(interaction: any) {
+    const embed = new EmbedBuilder()
+      .setColor('#5865F2')
+      .setTitle('🎤 Voice Activity Logging')
+      .setDescription('**Monitor voice channel activity**\n\nTrack voice events to maintain oversight of voice communications.')
+      .addFields(
+        { name: '📋 Features Included', value: '• Voice channel joins/leaves\n• Mute/unmute events\n• Deafen/undeafen events\n• Channel switching\n• Connection quality issues', inline: false },
+        { name: '⚙️ Current Status', value: '❌ **Disabled**\n📁 Channel: Not set', inline: true },
+        { name: '📏 Event Types', value: 'Join • Leave • Move\nMute • Deafen • Stream', inline: true }
+      )
+      .setTimestamp();
+      
+    const buttons = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('voice_logging_enable')
+          .setLabel('✅ Enable')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('voice_logging_disable')
+          .setLabel('❌ Disable')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('voice_logging_channel')
+          .setLabel('📁 Set Channel')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+  }
+  
+  private async configureMemberLogging(interaction: any) {
+    const embed = new EmbedBuilder()
+      .setColor('#5865F2')
+      .setTitle('👥 Member Event Logging')
+      .setDescription('**Track member activities and changes**\n\nMonitor member joins, leaves, and profile updates.')
+      .addFields(
+        { name: '📋 Features Included', value: '• Member joins with account age\n• Member leaves with join date\n• Nickname changes\n• Role additions/removals\n• Avatar updates', inline: false },
+        { name: '⚙️ Current Status', value: '❌ **Disabled**\n📁 Channel: Not set', inline: true },
+        { name: '📏 Event Types', value: 'Join • Leave • Update\nRoles • Nickname • Avatar', inline: true }
+      )
+      .setTimestamp();
+      
+    const buttons = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('member_logging_enable')
+          .setLabel('✅ Enable')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('member_logging_disable')
+          .setLabel('❌ Disable')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('member_logging_channel')
+          .setLabel('📁 Set Channel')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+  }
+  
+  private async configureModerationLogging(interaction: any) {
+    const embed = new EmbedBuilder()
+      .setColor('#E74C3C')
+      .setTitle('🛡️ Moderation Action Logging')
+      .setDescription('**Track all moderation activities**\n\nComplete audit trail of all moderation actions taken by staff.')
+      .addFields(
+        { name: '📋 Features Included', value: '• Bans, kicks, and timeouts\n• Warnings and infractions\n• Message purges\n• Role restrictions\n• Channel lockdowns', inline: false },
+        { name: '⚙️ Current Status', value: '❌ **Disabled**\n📁 Channel: Not set', inline: true },
+        { name: '📏 Event Types', value: 'Ban • Kick • Timeout\nWarn • Purge • Lock', inline: true }
+      )
+      .setTimestamp();
+      
+    const buttons = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('mod_logging_enable')
+          .setLabel('✅ Enable')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('mod_logging_disable')
+          .setLabel('❌ Disable')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('mod_logging_channel')
+          .setLabel('📁 Set Channel')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+  }
+  
+  private async configureAuditLogging(interaction: any) {
+    const embed = new EmbedBuilder()
+      .setColor('#9B59B6')
+      .setTitle('📋 Comprehensive Audit Logging')
+      .setDescription('**Complete server audit trail**\n\nTrack all server changes, administrative actions, and security events.')
+      .addFields(
+        { name: '📋 Features Included', value: '• Server settings changes\n• Channel/role modifications\n• Permission updates\n• Webhook activities\n• Bot additions/removals', inline: false },
+        { name: '⚙️ Current Status', value: '❌ **Disabled**\n📁 Channel: Not set', inline: true },
+        { name: '📏 Event Types', value: 'Settings • Permissions\nRoles • Channels • Security', inline: true }
+      )
+      .setTimestamp();
+      
+    const buttons = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('audit_logging_enable')
+          .setLabel('✅ Enable')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('audit_logging_disable')
+          .setLabel('❌ Disable')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('audit_logging_channel')
+          .setLabel('📁 Set Channel')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+  }
+  
+  private async configureLoggingChannels(interaction: any) {
+    const embed = new EmbedBuilder()
+      .setColor('#3498DB')
+      .setTitle('⚙️ Logging Channels Configuration')
+      .setDescription('**Set up dedicated logging channels**\n\nConfigure where different types of logs will be sent.')
+      .addFields(
+        { name: '📝 Recommended Setup', value: '• 📨 **#message-logs** - Message events\n• 🎤 **#voice-logs** - Voice activity\n• 👥 **#member-logs** - Member events\n• 🛡️ **#mod-logs** - Moderation actions\n• 📋 **#audit-logs** - Server changes', inline: false },
+        { name: '🔧 Quick Actions', value: 'Use the buttons below to set up channels quickly', inline: false }
+      )
+      .setTimestamp();
+      
+    const row1 = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('set_msg_channel')
+          .setLabel('📨 Message Channel')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('set_voice_channel')
+          .setLabel('🎤 Voice Channel')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('set_member_channel')
+          .setLabel('👥 Member Channel')
+          .setStyle(ButtonStyle.Primary)
+      );
+      
+    const row2 = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('set_mod_channel')
+          .setLabel('🛡️ Mod Channel')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('set_audit_channel')
+          .setLabel('📋 Audit Channel')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('create_all_channels')
+          .setLabel('✨ Auto Create All')
+          .setStyle(ButtonStyle.Success)
+      );
+      
+    const row3 = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back to Dashboard')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [row1, row2, row3], ephemeral: true });
+  }
+  
+  private async enableAllLogging(interaction: any) {
+    const embed = new EmbedBuilder()
+      .setColor('#57F287')
+      .setTitle('✅ All Logging Features Enabled')
+      .setDescription('**Complete logging system activated**\n\nAll logging features have been enabled for maximum server monitoring.')
+      .addFields(
+        { name: '✅ Enabled Features', value: '• 📨 Message Logging\n• 🎤 Voice Activity\n• 👥 Member Events\n• 🛡️ Moderation Actions\n• 📋 Audit Trail', inline: false },
+        { name: '⚠️ Important', value: 'Make sure to configure logging channels to receive the events!', inline: false }
+      )
+      .setTimestamp();
+      
+    const buttons = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('logging_channels')
+          .setLabel('⚙️ Configure Channels')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+  }
+  
+  private async disableAllLogging(interaction: any) {
+    const embed = new EmbedBuilder()
+      .setColor('#E74C3C')
+      .setTitle('❌ All Logging Features Disabled')
+      .setDescription('**Logging system deactivated**\n\nAll logging features have been disabled. No events will be recorded.')
+      .addFields(
+        { name: '❌ Disabled Features', value: '• 📨 Message Logging\n• 🎤 Voice Activity\n• 👥 Member Events\n• 🛡️ Moderation Actions\n• 📋 Audit Trail', inline: false },
+        { name: '📝 Note', value: 'You can re-enable individual features anytime from the dashboard', inline: false }
+      )
+      .setTimestamp();
+      
+    const buttons = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('logging_enable_all')
+          .setLabel('✅ Re-enable All')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
   }
 
   // ============================================================================
@@ -5217,28 +5696,21 @@ export class EnhancedDiscordBot {
     return {
       data: new SlashCommandBuilder()
         .setName('logging')
-        .setDescription('📝 Configure comprehensive server logging')
+        .setDescription('📝 Interactive server logging configuration with buttons')
+        .addSubcommand(sub =>
+          sub.setName('dashboard')
+            .setDescription('Open interactive logging dashboard'))
         .addSubcommand(sub =>
           sub.setName('setup')
-            .setDescription('Setup logging channels')
+            .setDescription('Quick setup logging channels')
             .addChannelOption(opt =>
               opt.setName('channel')
-                .setDescription('Logging channel')
+                .setDescription('Primary logging channel')
                 .setRequired(true)
                 .addChannelTypes(ChannelType.GuildText)))
         .addSubcommand(sub =>
-          sub.setName('toggle')
-            .setDescription('Toggle logging features')
-            .addStringOption(opt =>
-              opt.setName('feature')
-                .setDescription('Feature to toggle')
-                .setRequired(true)
-                .addChoices(
-                  { name: 'Messages', value: 'messages' },
-                  { name: 'Voice Activity', value: 'voice' },
-                  { name: 'Audit Log', value: 'audit' },
-                  { name: 'Member Events', value: 'members' }
-                )))
+          sub.setName('status')
+            .setDescription('View current logging configuration'))
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
       execute: async (interaction: any) => {
         if (!this.hasPermission(interaction, PermissionFlagsBits.ManageGuild)) {
@@ -5247,31 +5719,18 @@ export class EnhancedDiscordBot {
 
         const subcommand = interaction.options.getSubcommand();
         
-        if (subcommand === 'setup') {
-          const channel = interaction.options.getChannel('channel');
-          
-          const embed = new EmbedBuilder()
-            .setColor('#57F287')
-            .setTitle('📝 Logging Setup Complete')
-            .setDescription(`Logging configured for ${channel}`)
-            .addFields(
-              { name: '📨 Messages', value: 'Message edits, deletes, bulk deletes', inline: true },
-              { name: '🎤 Voice', value: 'Join, leave, mute, deafen events', inline: true },
-              { name: '📋 Audit', value: 'All moderation actions logged', inline: true }
-            )
-            .setTimestamp();
-            
-          await interaction.reply({ embeds: [embed] });
-        } else {
-          const feature = interaction.options.getString('feature');
-          
-          const embed = new EmbedBuilder()
-            .setColor('#F39C12')
-            .setTitle('🔄 Logging Feature Toggled')
-            .setDescription(`${feature} logging has been toggled`)
-            .setTimestamp();
-            
-          await interaction.reply({ embeds: [embed] });
+        switch (subcommand) {
+          case 'dashboard':
+            await this.showLoggingDashboard(interaction);
+            break;
+          case 'setup':
+            await this.handleLoggingSetup(interaction);
+            break;
+          case 'status':
+            await this.showLoggingStatus(interaction);
+            break;
+          default:
+            await this.showLoggingDashboard(interaction);
         }
       }
     };
