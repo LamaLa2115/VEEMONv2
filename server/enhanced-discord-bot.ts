@@ -4661,38 +4661,44 @@ export class EnhancedDiscordBot {
   private async handleLoggingButton(interaction: any) {
     const customId = interaction.customId;
     
-    switch (customId) {
-      case 'logging_messages':
-        await this.configureMessageLogging(interaction);
-        break;
-      case 'logging_voice':
-        await this.configureVoiceLogging(interaction);
-        break;
-      case 'logging_members':
-        await this.configureMemberLogging(interaction);
-        break;
-      case 'logging_moderation':
-        await this.configureModerationLogging(interaction);
-        break;
-      case 'logging_audit':
-        await this.configureAuditLogging(interaction);
-        break;
-      case 'logging_channels':
-        await this.configureLoggingChannels(interaction);
-        break;
-      case 'logging_enable_all':
-        await this.enableAllLogging(interaction);
-        break;
-      case 'logging_disable_all':
-        await this.disableAllLogging(interaction);
-        break;
-      case 'logging_open_dashboard':
-      case 'logging_configure':
-        await this.showLoggingDashboard(interaction);
-        break;
-      case 'logging_back':
-        await this.showLoggingDashboard(interaction);
-        break;
+    try {
+      // Defer the interaction to prevent timeout issues
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferUpdate();
+      }
+      
+      switch (customId) {
+        case 'logging_messages':
+          await this.configureMessageLogging(interaction);
+          break;
+        case 'logging_voice':
+          await this.configureVoiceLogging(interaction);
+          break;
+        case 'logging_members':
+          await this.configureMemberLogging(interaction);
+          break;
+        case 'logging_moderation':
+          await this.configureModerationLogging(interaction);
+          break;
+        case 'logging_audit':
+          await this.configureAuditLogging(interaction);
+          break;
+        case 'logging_channels':
+          await this.configureLoggingChannels(interaction);
+          break;
+        case 'logging_enable_all':
+          await this.enableAllLogging(interaction);
+          break;
+        case 'logging_disable_all':
+          await this.disableAllLogging(interaction);
+          break;
+        case 'logging_open_dashboard':
+        case 'logging_configure':
+          await this.showLoggingDashboard(interaction);
+          break;
+        case 'logging_back':
+          await this.showLoggingDashboard(interaction);
+          break;
       // Message logging buttons
       case 'msg_logging_enable':
       case 'message_logging_enable':
@@ -4800,11 +4806,34 @@ export class EnhancedDiscordBot {
       case 'create_all_channels':
         await this.createAllLoggingChannels(interaction);
         break;
-      default:
-        await interaction.reply({ 
-          content: '❌ Button handler not found. Please try again or contact support.', 
-          flags: MessageFlags.Ephemeral 
-        });
+        default:
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ 
+              content: '❌ Button handler not found. Please try again or contact support.', 
+              flags: MessageFlags.Ephemeral 
+            });
+          } else {
+            await interaction.editReply({ 
+              content: '❌ Button handler not found. Please try again or contact support.'
+            });
+          }
+      }
+    } catch (error: any) {
+      console.error('Error handling logging button:', error);
+      try {
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ 
+            content: '❌ An error occurred processing your request. Please try again.', 
+            flags: MessageFlags.Ephemeral 
+          });
+        } else {
+          await interaction.editReply({ 
+            content: '❌ An error occurred processing your request. Please try again.'
+          });
+        }
+      } catch (followupError) {
+        console.error('Error sending error message:', followupError);
+      }
     }
   }
   
@@ -4840,7 +4869,11 @@ export class EnhancedDiscordBot {
           .setStyle(ButtonStyle.Secondary)
       );
       
-    await interaction.reply({ embeds: [embed], components: [buttons], flags: MessageFlags.Ephemeral });
+    if (interaction.deferred) {
+      await interaction.editReply({ embeds: [embed], components: [buttons] });
+    } else {
+      await interaction.reply({ embeds: [embed], components: [buttons], flags: MessageFlags.Ephemeral });
+    }
   }
   
   private async configureVoiceLogging(interaction: any) {
@@ -5069,13 +5102,22 @@ export class EnhancedDiscordBot {
             .setStyle(ButtonStyle.Secondary)
         );
         
-      await interaction.reply({ embeds: [embed], components: [buttons], flags: MessageFlags.Ephemeral });
+      if (interaction.deferred) {
+        await interaction.editReply({ embeds: [embed], components: [buttons] });
+      } else {
+        await interaction.reply({ embeds: [embed], components: [buttons], flags: MessageFlags.Ephemeral });
+      }
       
       // Log this action for demo purposes
       console.log(`✅ All logging features enabled by ${interaction.user.tag} in guild ${interaction.guild.name}`);
       
     } catch (error: any) {
-      await interaction.reply({ content: `❌ Failed to enable logging: ${error.message}`, flags: MessageFlags.Ephemeral });
+      const errorMsg = `❌ Failed to enable logging: ${error.message}`;
+      if (interaction.deferred) {
+        await interaction.editReply({ content: errorMsg });
+      } else {
+        await interaction.reply({ content: errorMsg, flags: MessageFlags.Ephemeral });
+      }
     }
   }
   
@@ -5139,7 +5181,11 @@ export class EnhancedDiscordBot {
           .setStyle(ButtonStyle.Secondary)
       );
       
-    await interaction.reply({ embeds: [embed], components: [button], flags: MessageFlags.Ephemeral });
+    if (interaction.deferred) {
+      await interaction.editReply({ embeds: [embed], components: [button] });
+    } else {
+      await interaction.reply({ embeds: [embed], components: [button], flags: MessageFlags.Ephemeral });
+    }
   }
   
   private async toggleVoiceLogging(interaction: any, enabled: boolean) {
