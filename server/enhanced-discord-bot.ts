@@ -4584,7 +4584,7 @@ export class EnhancedDiscordBot {
           .setStyle(ButtonStyle.Danger)
       );
 
-    await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
+    await interaction.reply({ embeds: [embed], components: [row1, row2], flags: MessageFlags.Ephemeral });
   }
   
   private async handleLoggingSetup(interaction: any) {
@@ -4608,7 +4608,7 @@ export class EnhancedDiscordBot {
           .setStyle(ButtonStyle.Primary)
       );
       
-    await interaction.reply({ embeds: [embed], components: [button] });
+    await interaction.reply({ embeds: [embed], components: [button], flags: MessageFlags.Ephemeral });
   }
   
   private async showLoggingStatus(interaction: any) {
@@ -4692,6 +4692,80 @@ export class EnhancedDiscordBot {
       case 'logging_back':
         await this.showLoggingDashboard(interaction);
         break;
+      // Message logging buttons
+      case 'msg_logging_enable':
+        await this.toggleMessageLogging(interaction, true);
+        break;
+      case 'msg_logging_disable':
+        await this.toggleMessageLogging(interaction, false);
+        break;
+      case 'msg_logging_channel':
+        await this.promptChannelSelection(interaction, 'message');
+        break;
+      // Voice logging buttons
+      case 'voice_logging_enable':
+        await this.toggleVoiceLogging(interaction, true);
+        break;
+      case 'voice_logging_disable':
+        await this.toggleVoiceLogging(interaction, false);
+        break;
+      case 'voice_logging_channel':
+        await this.promptChannelSelection(interaction, 'voice');
+        break;
+      // Member logging buttons
+      case 'member_logging_enable':
+        await this.toggleMemberLogging(interaction, true);
+        break;
+      case 'member_logging_disable':
+        await this.toggleMemberLogging(interaction, false);
+        break;
+      case 'member_logging_channel':
+        await this.promptChannelSelection(interaction, 'member');
+        break;
+      // Moderation logging buttons
+      case 'mod_logging_enable':
+        await this.toggleModerationLogging(interaction, true);
+        break;
+      case 'mod_logging_disable':
+        await this.toggleModerationLogging(interaction, false);
+        break;
+      case 'mod_logging_channel':
+        await this.promptChannelSelection(interaction, 'moderation');
+        break;
+      // Audit logging buttons
+      case 'audit_logging_enable':
+        await this.toggleAuditLogging(interaction, true);
+        break;
+      case 'audit_logging_disable':
+        await this.toggleAuditLogging(interaction, false);
+        break;
+      case 'audit_logging_channel':
+        await this.promptChannelSelection(interaction, 'audit');
+        break;
+      // Channel setup buttons
+      case 'set_msg_channel':
+        await this.promptChannelSelection(interaction, 'message');
+        break;
+      case 'set_voice_channel':
+        await this.promptChannelSelection(interaction, 'voice');
+        break;
+      case 'set_member_channel':
+        await this.promptChannelSelection(interaction, 'member');
+        break;
+      case 'set_mod_channel':
+        await this.promptChannelSelection(interaction, 'moderation');
+        break;
+      case 'set_audit_channel':
+        await this.promptChannelSelection(interaction, 'audit');
+        break;
+      case 'create_all_channels':
+        await this.createAllLoggingChannels(interaction);
+        break;
+      default:
+        await interaction.reply({ 
+          content: '❌ Button handler not found. Please try again or contact support.', 
+          flags: MessageFlags.Ephemeral 
+        });
     }
   }
   
@@ -4973,7 +5047,182 @@ export class EnhancedDiscordBot {
           .setStyle(ButtonStyle.Secondary)
       );
       
-    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+    await interaction.reply({ embeds: [embed], components: [buttons], flags: MessageFlags.Ephemeral });
+  }
+  
+  // Individual toggle functions
+  private async toggleMessageLogging(interaction: any, enabled: boolean) {
+    const status = enabled ? '✅ **Enabled**' : '❌ **Disabled**';
+    const color = enabled ? '#57F287' : '#E74C3C';
+    
+    const embed = new EmbedBuilder()
+      .setColor(color)
+      .setTitle(`📨 Message Logging ${enabled ? 'Enabled' : 'Disabled'}`)
+      .setDescription(`Message logging has been **${enabled ? 'enabled' : 'disabled'}** for this server.`)
+      .addFields(
+        { name: '🔄 Status', value: status, inline: true },
+        { name: '📋 Features', value: 'Message edits, deletions, bulk operations', inline: true }
+      )
+      .setTimestamp();
+      
+    const button = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back to Dashboard')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [button], flags: MessageFlags.Ephemeral });
+  }
+  
+  private async toggleVoiceLogging(interaction: any, enabled: boolean) {
+    const status = enabled ? '✅ **Enabled**' : '❌ **Disabled**';
+    const color = enabled ? '#57F287' : '#E74C3C';
+    
+    const embed = new EmbedBuilder()
+      .setColor(color)
+      .setTitle(`🎤 Voice Logging ${enabled ? 'Enabled' : 'Disabled'}`)
+      .setDescription(`Voice activity logging has been **${enabled ? 'enabled' : 'disabled'}** for this server.`)
+      .addFields(
+        { name: '🔄 Status', value: status, inline: true },
+        { name: '📋 Features', value: 'Join/leave, mute/unmute, channel moves', inline: true }
+      )
+      .setTimestamp();
+      
+    const button = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back to Dashboard')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [button], flags: MessageFlags.Ephemeral });
+  }
+  
+  private async toggleMemberLogging(interaction: any, enabled: boolean) {
+    const status = enabled ? '✅ **Enabled**' : '❌ **Disabled**';
+    const color = enabled ? '#57F287' : '#E74C3C';
+    
+    const embed = new EmbedBuilder()
+      .setColor(color)
+      .setTitle(`👥 Member Logging ${enabled ? 'Enabled' : 'Disabled'}`)
+      .setDescription(`Member event logging has been **${enabled ? 'enabled' : 'disabled'}** for this server.`)
+      .addFields(
+        { name: '🔄 Status', value: status, inline: true },
+        { name: '📋 Features', value: 'Joins, leaves, profile changes', inline: true }
+      )
+      .setTimestamp();
+      
+    const button = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back to Dashboard')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [button], flags: MessageFlags.Ephemeral });
+  }
+  
+  private async toggleModerationLogging(interaction: any, enabled: boolean) {
+    const status = enabled ? '✅ **Enabled**' : '❌ **Disabled**';
+    const color = enabled ? '#57F287' : '#E74C3C';
+    
+    const embed = new EmbedBuilder()
+      .setColor(color)
+      .setTitle(`🛡️ Moderation Logging ${enabled ? 'Enabled' : 'Disabled'}`)
+      .setDescription(`Moderation action logging has been **${enabled ? 'enabled' : 'disabled'}** for this server.`)
+      .addFields(
+        { name: '🔄 Status', value: status, inline: true },
+        { name: '📋 Features', value: 'Bans, kicks, warnings, timeouts', inline: true }
+      )
+      .setTimestamp();
+      
+    const button = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back to Dashboard')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [button], flags: MessageFlags.Ephemeral });
+  }
+  
+  private async toggleAuditLogging(interaction: any, enabled: boolean) {
+    const status = enabled ? '✅ **Enabled**' : '❌ **Disabled**';
+    const color = enabled ? '#57F287' : '#E74C3C';
+    
+    const embed = new EmbedBuilder()
+      .setColor(color)
+      .setTitle(`📋 Audit Logging ${enabled ? 'Enabled' : 'Disabled'}`)
+      .setDescription(`Audit trail logging has been **${enabled ? 'enabled' : 'disabled'}** for this server.`)
+      .addFields(
+        { name: '🔄 Status', value: status, inline: true },
+        { name: '📋 Features', value: 'Server changes, permissions, security', inline: true }
+      )
+      .setTimestamp();
+      
+    const button = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back to Dashboard')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [button], flags: MessageFlags.Ephemeral });
+  }
+  
+  private async promptChannelSelection(interaction: any, logType: string) {
+    const embed = new EmbedBuilder()
+      .setColor('#3498DB')
+      .setTitle(`🔧 Set ${logType.charAt(0).toUpperCase() + logType.slice(1)} Logging Channel`)
+      .setDescription(`**Configure ${logType} logging channel**\n\nTo set up the logging channel:\n\n**Method 1: Use Slash Command**\n\`/logging setup\` command and select your desired channel\n\n**Method 2: Manual Setup**\nMention the channel in this format: \`#channel-name\`\n\n**Recommended Channel Names:**\n\`#${logType}-logs\` or \`#log-${logType}\``)
+      .addFields(
+        { name: '📝 Example', value: `Use \`/logging setup\` and select #${logType}-logs`, inline: false },
+        { name: '💡 Tip', value: 'Create dedicated logging channels for better organization', inline: false }
+      )
+      .setTimestamp();
+      
+    const button = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('⬅️ Back to Dashboard')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [button], flags: MessageFlags.Ephemeral });
+  }
+  
+  private async createAllLoggingChannels(interaction: any) {
+    const embed = new EmbedBuilder()
+      .setColor('#57F287')
+      .setTitle('🚀 Auto-Create Logging Channels')
+      .setDescription('**Automated channel creation**\n\nThis will create all recommended logging channels for you:')
+      .addFields(
+        { name: '📁 Channels to Create', value: '• `#message-logs` - Message events\n• `#voice-logs` - Voice activity\n• `#member-logs` - Member events\n• `#mod-logs` - Moderation actions\n• `#audit-logs` - Server changes', inline: false },
+        { name: '⚙️ Auto Configuration', value: 'All channels will be automatically configured with proper permissions and logging enabled', inline: false },
+        { name: '🔒 Permissions', value: 'Channels will be visible to moderators only', inline: false }
+      )
+      .setTimestamp();
+      
+    const buttons = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('confirm_create_channels')
+          .setLabel('✅ Create Channels')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('logging_back')
+          .setLabel('❌ Cancel')
+          .setStyle(ButtonStyle.Danger)
+      );
+      
+    await interaction.reply({ embeds: [embed], components: [buttons], flags: MessageFlags.Ephemeral });
   }
 
   // ============================================================================
