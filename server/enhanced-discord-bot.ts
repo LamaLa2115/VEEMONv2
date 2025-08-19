@@ -16,8 +16,6 @@ import {
 } from '@discordjs/voice';
 import { storage } from './storage';
 import { config } from './config';
-import { VoicemasterSystem } from './voicemaster-system';
-import { LoggingSystem } from './logging-system';
 import axios from 'axios';
 // Import music libraries (fixed imports)
 import * as play from 'play-dl';
@@ -50,7 +48,7 @@ export class EnhancedDiscordBot {
   private voiceConnections: Map<string, VoiceConnection>;
   private blackjackGames: Map<string, any>;
   private cooldowns: Map<string, Map<string, number>>;
-  private voicemasterSystem: VoicemasterSystem;
+  private System: System;
   private loggingSystem: LoggingSystem;
 
   constructor() {
@@ -67,7 +65,7 @@ export class EnhancedDiscordBot {
     this.voiceConnections = new Map();
     this.blackjackGames = new Map();
     this.cooldowns = new Map();
-    this.voicemasterSystem = new VoicemasterSystem(this.client);
+    this.System = new System(this.client);
     this.loggingSystem = new LoggingSystem(this.client);
     
     this.setupCommands();
@@ -212,7 +210,131 @@ export class EnhancedDiscordBot {
         }
       }
     };
+// Register command
+const commands = [
+  new SlashCommandBuilder()
+    .setName("voicemenu")
+    .setDescription("VoiceMaster control panel")
+].map(command => command.toJSON());
 
+const rest = new REST({ version: "10" }).setToken(TOKEN);
+
+(async () => {
+  try {
+    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
+      body: commands,
+    });
+    console.log("✅ Commands registered.");
+  } catch (err) {
+    console.error(err);
+  }
+})();
+
+client.once(Events.ClientReady, (c) => {
+  console.log(`✅ Logged in as ${c.user.tag}`);
+});
+
+    // ============================================================================
+    // VoiceMaster
+    // ============================================================================
+    
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === "voicemenu") {
+    const embed = new EmbedBuilder()
+      .setTitle("🎙️ VoiceMaster Controls")
+      .setDescription("Manage your temporary voice channel with these buttons.")
+      .setColor(0x2f3136);
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId("lock").setLabel("🔒 Lock").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("unlock").setLabel("🔓 Unlock").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("limit").setLabel("👥 Set Limit").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("rename").setLabel("✏️ Rename").setStyle(ButtonStyle.Secondary),
+    );
+
+    const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId("kick").setLabel("👢 Kick User").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("invite").setLabel("➕ Invite User").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("transfer").setLabel("👑 Transfer Crown").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("newvc").setLabel("📂 New VC").setStyle(ButtonStyle.Secondary),
+    );
+
+    await interaction.reply({ embeds: [embed], components: [row, row2], ephemeral: true });
+  }
+});
+
+// Button handler
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isButton()) return;
+
+  const member = interaction.member as GuildMember;
+  const channel = member.voice.channel;
+
+  if (!channel) {
+    await interaction.reply({ content: "❌ You must be in a voice channel to use this.", ephemeral: true });
+    return;
+  }
+
+  switch (interaction.customId) {
+    case "lock":
+      await channel.permissionOverwrites.edit(interaction.guild!.roles.everyone, {
+        Connect: false,
+      });
+      await interaction.reply({ content: "🔒 Voice channel locked!", ephemeral: true });
+      break;
+
+    case "unlock":
+      await channel.permissionOverwrites.edit(interaction.guild!.roles.everyone, {
+        Connect: true,
+      });
+      await interaction.reply({ content: "🔓 Voice channel unlocked!", ephemeral: true });
+      break;
+
+    case "limit":
+      await channel.setUserLimit(2); // Example: set to 2, you could add a modal/input
+      await interaction.reply({ content: "👥 User limit set to 2!", ephemeral: true });
+      break;
+
+    case "rename":
+      await channel.setName(`Custom VC ${Date.now()}`);
+      await interaction.reply({ content: "✏️ Channel renamed!", ephemeral: true });
+      break;
+
+    case "kick":
+      if (channel.members.size > 1) {
+        const target = channel.members.filter(m => m.id !== member.id).first();
+        if (target) {
+          await target.voice.disconnect("Kicked by VoiceMaster");
+          await interaction.reply({ content: `👢 Kicked ${target.user.tag}`, ephemeral: true });
+        }
+      } else {
+        await interaction.reply({ content: "❌ No one to kick.", ephemeral: true });
+      }
+      break;
+
+    case "invite":
+      await interaction.reply({ content: "➕ Use right-click > Invite to VC (API limit).", ephemeral: true });
+      break;
+
+    case "transfer":
+      await interaction.reply({ content: "👑 Crown transfer feature requires DB tracking.", ephemeral: true });
+      break;
+
+    case "newvc":
+      const newChannel = await channel.guild.channels.create({
+        name: `New VC by ${member.user.username}`,
+        type: 2, // voice channel
+        parent: channel.parent ?? undefined,
+      });
+      await member.voice.setChannel(newChannel);
+      await interaction.reply({ content: `📂 Created and moved you to <#${newChannel.id}>`, ephemeral: true });
+      break;
+  }
+});
+
+client.login(TOKEN);
     // ============================================================================
     // OPENAI COMMANDS (AI-Powered features)
     // ============================================================================
@@ -1040,10 +1162,10 @@ export class EnhancedDiscordBot {
       }
     };
 
-    // Voicemaster Command - Complete voice channel management system
-    const voicemasterCommand: Command = {
+    //  Command - Complete voice channel management system
+    const Command: Command = {
       data: new SlashCommandBuilder()
-        .setName('voicemaster')
+        .setName('')
         .setDescription('🔊 Complete voice channel management system')
         .addSubcommand(subcommand =>
           subcommand
@@ -1116,7 +1238,7 @@ export class EnhancedDiscordBot {
           const member = interaction.member as GuildMember;
           if (!member.voice.channel) {
             return await interaction.reply({ 
-              content: '❌ You must be in a voice channel to use voicemaster commands.', 
+              content: '❌ You must be in a voice channel to use  commands.', 
               ephemeral: true 
             });
           }
@@ -1451,7 +1573,7 @@ export class EnhancedDiscordBot {
             '📚 Educational': ['quote - Inspirational quotes', 'fact - Random facts', 'numbertrivia - Number trivia', 'space - Space facts'],
             '⚙️ Bot Management': ['botinfo - Bot information', 'ping - Bot latency', 'help - This help menu', 'reload - Restart bot (owner only)', 'servers - Server management (owner only)'],
             '💤 Personal': ['afk - Set AFK status', 'remind - Set reminders'],
-            '🔊 Voice Control': ['voicemaster - Complete voice channel management'],
+            '🔊 Voice Control': [' - Complete voice channel management'],
             '🎨 Creative': ['ascii - ASCII art generator'],
             '🏆 Community': ['starboard - Star message system', 'halloffame - Hall of fame', 'hallofshame - Hall of shame', 'reactionroles - Reaction role system', 'joingate - Join gate system'],
             '📊 Leveling & Stats': ['level - User leveling system', 'leaderboard - Server leaderboards', 'counters - Server counters'],
@@ -1516,7 +1638,7 @@ export class EnhancedDiscordBot {
     this.commands.set('role', roleCommand);
     this.commands.set('urban', urbanCommand);
     this.commands.set('blackjack', blackjackCommand);
-    this.commands.set('voicemaster', this.voicemasterSystem.createVoicemasterCommand());
+    this.commands.set('', this.System.createCommand());
     this.commands.set('logging', this.loggingSystem.createLoggingCommand());
     this.commands.set('help', enhancedHelpCommand);
     this.commands.set('ping', pingCommand);
@@ -1557,7 +1679,7 @@ export class EnhancedDiscordBot {
     this.commands.set('remind', this.createRemindCommand());
     
     // Advanced systems
-    this.commands.set('voicemaster', this.voicemasterSystem.createVoicemasterCommand());
+    this.commands.set('', this.System.createCommand());
     this.commands.set('logging', this.loggingSystem.createLoggingCommand());
 
     // Add all the new advanced commands
@@ -3518,7 +3640,7 @@ export class EnhancedDiscordBot {
       await this.registerCommands();
       
       // Initialize advanced systems
-      await this.voicemasterSystem.setupEventHandlers();
+      await this.System.setupEventHandlers();
       await this.loggingSystem.setupEventHandlers();
     });
 
@@ -4037,7 +4159,7 @@ export class EnhancedDiscordBot {
   }
 
   // ============================================================================
-  // VOICEMASTER HANDLERS
+  //  HANDLERS
   // ============================================================================
   
   private async handleVoiceLock(interaction: any) {
@@ -4389,9 +4511,9 @@ export class EnhancedDiscordBot {
         .setTimestamp();
       
       await interaction.reply({ embeds: [embed], ephemeral: true });
-    } else if (customId.startsWith('voice_') || customId.startsWith('voicemaster_')) {
+    } else if (customId.startsWith('voice_') || customId.startsWith('_')) {
       // Handle voice control buttons
-      await this.voicemasterSystem.handleVoicemasterButton(interaction);
+      await this.System.handleButton(interaction);
     } else if (customId.startsWith('logging_') || customId.startsWith('set_')) {
       // Handle logging configuration buttons
       await this.loggingSystem.handleLoggingButton(interaction);
@@ -5557,9 +5679,9 @@ export class EnhancedDiscordBot {
         break;
         
       default:
-        // Check if it's a voicemaster or logging modal
-        if (customId.startsWith('voicemaster_') || customId.startsWith('voice_modal_')) {
-          await this.voicemasterSystem.handleVoicemasterModal(interaction);
+        // Check if it's a  or logging modal
+        if (customId.startsWith('_') || customId.startsWith('voice_modal_')) {
+          await this.System.handleModal(interaction);
         } else if (customId.startsWith('channel_modal_')) {
           await this.loggingSystem.handleModalInteraction(interaction);
         } else {
@@ -5903,7 +6025,7 @@ export class EnhancedDiscordBot {
         'remind': 'Set personal reminders with timestamps'
       },
       '🔊 Voice Control': {
-        'voicemaster': 'Complete voice channel management: lock, unlock, limit, rename, invite, kick, transfer ownership'
+        '': 'Complete voice channel management: lock, unlock, limit, rename, invite, kick, transfer ownership'
       },
       '🎨 Creative': {
         'ascii': 'Generate ASCII art from text'
@@ -6007,15 +6129,15 @@ export class EnhancedDiscordBot {
         'fun': 'Access various entertainment commands'
       },
       'voice': {
-        'voicemaster setup': 'Setup join-to-create voice channels',
-        'voicemaster lock': 'Lock your voice channel',
-        'voicemaster unlock': 'Unlock your voice channel',
-        'voicemaster limit': 'Set user limit for your channel',
-        'voicemaster name': 'Rename your voice channel',
-        'voicemaster invite': 'Invite user to your channel',
-        'voicemaster kick': 'Kick user from your channel',
-        'voicemaster transfer': 'Transfer channel ownership',
-        'voicemaster menu': 'Interactive voice control panel'
+        ' setup': 'Setup join-to-create voice channels',
+        ' lock': 'Lock your voice channel',
+        ' unlock': 'Unlock your voice channel',
+        ' limit': 'Set user limit for your channel',
+        ' name': 'Rename your voice channel',
+        ' invite': 'Invite user to your channel',
+        ' kick': 'Kick user from your channel',
+        ' transfer': 'Transfer channel ownership',
+        ' menu': 'Interactive voice control panel'
       },
       'utility': {
         'avatar': 'Display user avatars',
