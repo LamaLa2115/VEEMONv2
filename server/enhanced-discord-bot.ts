@@ -2,7 +2,8 @@ import {
   Client, GatewayIntentBits, Collection, SlashCommandBuilder, EmbedBuilder, 
   PermissionFlagsBits, REST, Routes, ChannelType, TextChannel, GuildMember, 
   Role, ActionRowBuilder, ButtonBuilder, ButtonStyle, VoiceChannel,
-  AttachmentBuilder, ColorResolvable, VoiceState, ModalBuilder, TextInputBuilder, TextInputStyle
+  AttachmentBuilder, ColorResolvable, VoiceState, ModalBuilder, TextInputBuilder, TextInputStyle,
+  MessageFlags
 } from 'discord.js';
 import { 
   joinVoiceChannel, 
