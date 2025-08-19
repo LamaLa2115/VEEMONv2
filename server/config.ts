@@ -58,41 +58,42 @@ export const config: ConfigType = {
   // ============================================================================
   // DISCORD BOT CONFIGURATION
   // ============================================================================
-  DISCORD_BOT_TOKEN: process.env.DISCORD_BOT_TOKEN || '',
-  DISCORD_CLIENT_ID: process.env.DISCORD_CLIENT_ID || '',
-  DISCORD_CLIENT_SECRET: process.env.DISCORD_CLIENT_SECRET || '',
+  // Prefer setting these in your .env file. If you don't use .env, paste your keys here.
+  DISCORD_BOT_TOKEN: process.env.DISCORD_BOT_TOKEN || 'YOUR_DISCORD_BOT_TOKEN',
+  DISCORD_CLIENT_ID: process.env.DISCORD_CLIENT_ID || 'YOUR_DISCORD_CLIENT_ID',
+  DISCORD_CLIENT_SECRET: process.env.DISCORD_CLIENT_SECRET || 'YOUR_DISCORD_CLIENT_SECRET',
   
   // ============================================================================
   // DATABASE CONFIGURATION
   // ============================================================================
-  DATABASE_URL: process.env.DATABASE_URL || '',
+  DATABASE_URL: process.env.DATABASE_URL || 'YOUR_DATABASE_URL',
   
   // ============================================================================
   // EXTERNAL API KEYS
   // ============================================================================
   
   // Last.fm API for music data and user statistics
-  LASTFM_API_KEY: process.env.LASTFM_API_KEY || '',
-  LASTFM_API_SECRET: process.env.LASTFM_API_SECRET || '',
+  LASTFM_API_KEY: process.env.LASTFM_API_KEY || 'YOUR_LASTFM_API_KEY',
+  LASTFM_API_SECRET: process.env.LASTFM_API_SECRET || 'YOUR_LASTFM_API_SECRET',
   
   // YouTube API for music search and metadata
-  YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || '',
+  YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || 'YOUR_YOUTUBE_API_KEY',
   
   // Spotify API for music integration (optional)
-  SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID || '',
-  SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET || '',
+  SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID || 'YOUR_SPOTIFY_CLIENT_ID',
+  SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET || 'YOUR_SPOTIFY_CLIENT_SECRET',
   
   // OpenAI API for advanced bot features (optional)
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY',
   
   // Weather API for weather commands (optional)
-  WEATHER_API_KEY: process.env.WEATHER_API_KEY || '',
+  WEATHER_API_KEY: process.env.WEATHER_API_KEY || 'YOUR_WEATHER_API_KEY',
   
   // News API for news commands (optional)
-  NEWS_API_KEY: process.env.NEWS_API_KEY || '',
+  NEWS_API_KEY: process.env.NEWS_API_KEY || 'YOUR_NEWS_API_KEY',
   
   // Genius API for lyrics lookup
-  GENIUS_ACCESS_TOKEN: process.env.GENIUS_ACCESS_TOKEN || '',
+  GENIUS_ACCESS_TOKEN: process.env.GENIUS_ACCESS_TOKEN || 'YOUR_GENIUS_ACCESS_TOKEN',
   
   // ============================================================================
   // BOT BEHAVIOR SETTINGS
