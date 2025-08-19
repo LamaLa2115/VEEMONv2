@@ -14,7 +14,23 @@ import {
   type BotStats,
   type InsertBotStats,
   type User, 
-  type InsertUser 
+  type InsertUser,
+  type VoicemasterChannel,
+  type InsertVoicemasterChannel,
+  type VoicemasterConfig,
+  type InsertVoicemasterConfig,
+  type MessageLog,
+  type InsertMessageLog,
+  type VoiceLog,
+  type InsertVoiceLog,
+  type MemberLog,
+  type InsertMemberLog,
+  type AuditLog,
+  type InsertAuditLog,
+  type ServerLog,
+  type InsertServerLog,
+  type LoggingConfig,
+  type InsertLoggingConfig
 } from "server/schema";
 import { randomUUID } from "crypto";
 
@@ -60,6 +76,37 @@ export interface IStorage {
   incrementCommandUsed(serverId: string): Promise<void>;
   incrementModerationAction(serverId: string): Promise<void>;
   incrementSongPlayed(serverId: string): Promise<void>;
+
+  // Voicemaster system
+  getVoicemasterConfig(serverId: string): Promise<VoicemasterConfig | undefined>;
+  createVoicemasterConfig(config: InsertVoicemasterConfig): Promise<VoicemasterConfig>;
+  updateVoicemasterConfig(serverId: string, updates: Partial<VoicemasterConfig>): Promise<VoicemasterConfig | undefined>;
+  
+  getVoicemasterChannel(channelId: string): Promise<VoicemasterChannel | undefined>;
+  createVoicemasterChannel(channel: InsertVoicemasterChannel): Promise<VoicemasterChannel>;
+  updateVoicemasterChannel(channelId: string, updates: Partial<VoicemasterChannel>): Promise<VoicemasterChannel | undefined>;
+  deleteVoicemasterChannel(channelId: string): Promise<boolean>;
+  getVoicemasterChannelsByServer(serverId: string): Promise<VoicemasterChannel[]>;
+
+  // Logging system
+  getLoggingConfig(serverId: string): Promise<LoggingConfig | undefined>;
+  createLoggingConfig(config: InsertLoggingConfig): Promise<LoggingConfig>;
+  updateLoggingConfig(serverId: string, updates: Partial<LoggingConfig>): Promise<LoggingConfig | undefined>;
+
+  createMessageLog(log: InsertMessageLog): Promise<MessageLog>;
+  getMessageLogs(serverId: string, limit?: number): Promise<MessageLog[]>;
+  
+  createVoiceLog(log: InsertVoiceLog): Promise<VoiceLog>;
+  getVoiceLogs(serverId: string, limit?: number): Promise<VoiceLog[]>;
+  
+  createMemberLog(log: InsertMemberLog): Promise<MemberLog>;
+  getMemberLogs(serverId: string, limit?: number): Promise<MemberLog[]>;
+  
+  createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
+  getAuditLogs(serverId: string, limit?: number): Promise<AuditLog[]>;
+  
+  createServerLog(log: InsertServerLog): Promise<ServerLog>;
+  getServerLogs(serverId: string, limit?: number): Promise<ServerLog[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -71,6 +118,14 @@ export class MemStorage implements IStorage {
   private afkUsers: Map<string, AfkUser>;
   private musicQueue: Map<string, MusicQueueItem>;
   private botStats: Map<string, BotStats>;
+  private voicemasterConfigs: Map<string, VoicemasterConfig>;
+  private voicemasterChannels: Map<string, VoicemasterChannel>;
+  private loggingConfigs: Map<string, LoggingConfig>;
+  private messageLogs: Map<string, MessageLog>;
+  private voiceLogs: Map<string, VoiceLog>;
+  private memberLogs: Map<string, MemberLog>;
+  private auditLogs: Map<string, AuditLog>;
+  private serverLogs: Map<string, ServerLog>;
 
   constructor() {
     this.users = new Map();
@@ -81,6 +136,14 @@ export class MemStorage implements IStorage {
     this.afkUsers = new Map();
     this.musicQueue = new Map();
     this.botStats = new Map();
+    this.voicemasterConfigs = new Map();
+    this.voicemasterChannels = new Map();
+    this.loggingConfigs = new Map();
+    this.messageLogs = new Map();
+    this.voiceLogs = new Map();
+    this.memberLogs = new Map();
+    this.auditLogs = new Map();
+    this.serverLogs = new Map();
   }
 
   // User methods
@@ -301,6 +364,217 @@ export class MemStorage implements IStorage {
       songsPlayed: (stats?.songsPlayed || 0) + 1,
       lastUpdated: new Date(),
     });
+  }
+
+  // Voicemaster system methods
+  async getVoicemasterConfig(serverId: string): Promise<VoicemasterConfig | undefined> {
+    return this.voicemasterConfigs.get(serverId);
+  }
+
+  async createVoicemasterConfig(config: InsertVoicemasterConfig): Promise<VoicemasterConfig> {
+    const id = randomUUID();
+    const newConfig: VoicemasterConfig = {
+      ...config,
+      id,
+      joinToCreateChannelId: config.joinToCreateChannelId || null,
+      categoryId: config.categoryId || null,
+      defaultChannelName: config.defaultChannelName ?? "{username}'s Channel",
+      defaultUserLimit: config.defaultUserLimit ?? 0,
+      isEnabled: config.isEnabled ?? false,
+      createdAt: new Date(),
+    };
+    this.voicemasterConfigs.set(config.serverId, newConfig);
+    return newConfig;
+  }
+
+  async updateVoicemasterConfig(serverId: string, updates: Partial<VoicemasterConfig>): Promise<VoicemasterConfig | undefined> {
+    const config = this.voicemasterConfigs.get(serverId);
+    if (!config) return undefined;
+    const updatedConfig = { ...config, ...updates };
+    this.voicemasterConfigs.set(serverId, updatedConfig);
+    return updatedConfig;
+  }
+
+  async getVoicemasterChannel(channelId: string): Promise<VoicemasterChannel | undefined> {
+    return this.voicemasterChannels.get(channelId);
+  }
+
+  async createVoicemasterChannel(channel: InsertVoicemasterChannel): Promise<VoicemasterChannel> {
+    const id = randomUUID();
+    const newChannel: VoicemasterChannel = {
+      ...channel,
+      id,
+      userLimit: channel.userLimit ?? 0,
+      isLocked: channel.isLocked ?? false,
+      allowedUsers: channel.allowedUsers ?? [],
+      bannedUsers: channel.bannedUsers ?? [],
+      createdAt: new Date(),
+    };
+    this.voicemasterChannels.set(channel.channelId, newChannel);
+    return newChannel;
+  }
+
+  async updateVoicemasterChannel(channelId: string, updates: Partial<VoicemasterChannel>): Promise<VoicemasterChannel | undefined> {
+    const channel = this.voicemasterChannels.get(channelId);
+    if (!channel) return undefined;
+    const updatedChannel = { ...channel, ...updates };
+    this.voicemasterChannels.set(channelId, updatedChannel);
+    return updatedChannel;
+  }
+
+  async deleteVoicemasterChannel(channelId: string): Promise<boolean> {
+    return this.voicemasterChannels.delete(channelId);
+  }
+
+  async getVoicemasterChannelsByServer(serverId: string): Promise<VoicemasterChannel[]> {
+    return Array.from(this.voicemasterChannels.values()).filter(ch => ch.serverId === serverId);
+  }
+
+  // Logging system methods
+  async getLoggingConfig(serverId: string): Promise<LoggingConfig | undefined> {
+    return this.loggingConfigs.get(serverId);
+  }
+
+  async createLoggingConfig(config: InsertLoggingConfig): Promise<LoggingConfig> {
+    const id = randomUUID();
+    const newConfig: LoggingConfig = {
+      ...config,
+      id,
+      messageLogChannelId: config.messageLogChannelId || null,
+      voiceLogChannelId: config.voiceLogChannelId || null,
+      memberLogChannelId: config.memberLogChannelId || null,
+      moderationLogChannelId: config.moderationLogChannelId || null,
+      auditLogChannelId: config.auditLogChannelId || null,
+      serverLogChannelId: config.serverLogChannelId || null,
+      isMessageLogEnabled: config.isMessageLogEnabled ?? false,
+      isVoiceLogEnabled: config.isVoiceLogEnabled ?? false,
+      isMemberLogEnabled: config.isMemberLogEnabled ?? false,
+      isModerationLogEnabled: config.isModerationLogEnabled ?? false,
+      isAuditLogEnabled: config.isAuditLogEnabled ?? false,
+      isServerLogEnabled: config.isServerLogEnabled ?? false,
+      createdAt: new Date(),
+    };
+    this.loggingConfigs.set(config.serverId, newConfig);
+    return newConfig;
+  }
+
+  async updateLoggingConfig(serverId: string, updates: Partial<LoggingConfig>): Promise<LoggingConfig | undefined> {
+    const config = this.loggingConfigs.get(serverId);
+    if (!config) return undefined;
+    const updatedConfig = { ...config, ...updates };
+    this.loggingConfigs.set(serverId, updatedConfig);
+    return updatedConfig;
+  }
+
+  async createMessageLog(log: InsertMessageLog): Promise<MessageLog> {
+    const id = randomUUID();
+    const newLog: MessageLog = {
+      ...log,
+      id,
+      content: log.content ?? null,
+      attachments: log.attachments ?? [],
+      oldContent: log.oldContent ?? null,
+      timestamp: new Date(),
+    };
+    this.messageLogs.set(id, newLog);
+    return newLog;
+  }
+
+  async getMessageLogs(serverId: string, limit = 50): Promise<MessageLog[]> {
+    return Array.from(this.messageLogs.values())
+      .filter(log => log.serverId === serverId)
+      .sort((a, b) => b.timestamp!.getTime() - a.timestamp!.getTime())
+      .slice(0, limit);
+  }
+
+  async createVoiceLog(log: InsertVoiceLog): Promise<VoiceLog> {
+    const id = randomUUID();
+    const newLog: VoiceLog = {
+      ...log,
+      id,
+      channelId: log.channelId ?? null,
+      channelName: log.channelName ?? null,
+      oldChannelId: log.oldChannelId ?? null,
+      oldChannelName: log.oldChannelName ?? null,
+      timestamp: new Date(),
+    };
+    this.voiceLogs.set(id, newLog);
+    return newLog;
+  }
+
+  async getVoiceLogs(serverId: string, limit = 50): Promise<VoiceLog[]> {
+    return Array.from(this.voiceLogs.values())
+      .filter(log => log.serverId === serverId)
+      .sort((a, b) => b.timestamp!.getTime() - a.timestamp!.getTime())
+      .slice(0, limit);
+  }
+
+  async createMemberLog(log: InsertMemberLog): Promise<MemberLog> {
+    const id = randomUUID();
+    const newLog: MemberLog = {
+      ...log,
+      id,
+      discriminator: log.discriminator ?? null,
+      oldValue: log.oldValue ?? null,
+      newValue: log.newValue ?? null,
+      details: log.details ?? {},
+      timestamp: new Date(),
+    };
+    this.memberLogs.set(id, newLog);
+    return newLog;
+  }
+
+  async getMemberLogs(serverId: string, limit = 50): Promise<MemberLog[]> {
+    return Array.from(this.memberLogs.values())
+      .filter(log => log.serverId === serverId)
+      .sort((a, b) => b.timestamp!.getTime() - a.timestamp!.getTime())
+      .slice(0, limit);
+  }
+
+  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    const id = randomUUID();
+    const newLog: AuditLog = {
+      ...log,
+      id,
+      executorId: log.executorId ?? null,
+      executorUsername: log.executorUsername ?? null,
+      targetId: log.targetId ?? null,
+      reason: log.reason ?? null,
+      changes: log.changes ?? [],
+      timestamp: new Date(),
+    };
+    this.auditLogs.set(id, newLog);
+    return newLog;
+  }
+
+  async getAuditLogs(serverId: string, limit = 50): Promise<AuditLog[]> {
+    return Array.from(this.auditLogs.values())
+      .filter(log => log.serverId === serverId)
+      .sort((a, b) => b.timestamp!.getTime() - a.timestamp!.getTime())
+      .slice(0, limit);
+  }
+
+  async createServerLog(log: InsertServerLog): Promise<ServerLog> {
+    const id = randomUUID();
+    const newLog: ServerLog = {
+      ...log,
+      id,
+      targetId: log.targetId ?? null,
+      targetName: log.targetName ?? null,
+      executorId: log.executorId ?? null,
+      executorUsername: log.executorUsername ?? null,
+      details: log.details ?? {},
+      timestamp: new Date(),
+    };
+    this.serverLogs.set(id, newLog);
+    return newLog;
+  }
+
+  async getServerLogs(serverId: string, limit = 50): Promise<ServerLog[]> {
+    return Array.from(this.serverLogs.values())
+      .filter(log => log.serverId === serverId)
+      .sort((a, b) => b.timestamp!.getTime() - a.timestamp!.getTime())
+      .slice(0, limit);
   }
 }
 

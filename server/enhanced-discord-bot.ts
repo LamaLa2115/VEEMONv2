@@ -16,6 +16,8 @@ import {
 } from '@discordjs/voice';
 import { storage } from './storage';
 import { config } from './config';
+import { VoicemasterSystem } from './voicemaster-system';
+import { LoggingSystem } from './logging-system';
 import axios from 'axios';
 // Import music libraries (fixed imports)
 import * as play from 'play-dl';
@@ -48,6 +50,8 @@ export class EnhancedDiscordBot {
   private voiceConnections: Map<string, VoiceConnection>;
   private blackjackGames: Map<string, any>;
   private cooldowns: Map<string, Map<string, number>>;
+  private voicemasterSystem: VoicemasterSystem;
+  private loggingSystem: LoggingSystem;
 
   constructor() {
     this.client = new Client({
@@ -63,6 +67,8 @@ export class EnhancedDiscordBot {
     this.voiceConnections = new Map();
     this.blackjackGames = new Map();
     this.cooldowns = new Map();
+    this.voicemasterSystem = new VoicemasterSystem(this.client);
+    this.loggingSystem = new LoggingSystem(this.client);
     
     this.setupCommands();
     this.setupEventListeners();
@@ -1510,6 +1516,8 @@ export class EnhancedDiscordBot {
     this.commands.set('role', roleCommand);
     this.commands.set('urban', urbanCommand);
     this.commands.set('blackjack', blackjackCommand);
+    this.commands.set('voicemaster', this.voicemasterSystem.createVoicemasterCommand());
+    this.commands.set('logging', this.loggingSystem.createLoggingCommand());
     this.commands.set('help', enhancedHelpCommand);
     this.commands.set('ping', pingCommand);
     this.commands.set('serverinfo', serverInfoCommand);
@@ -1547,7 +1555,10 @@ export class EnhancedDiscordBot {
     this.commands.set('define', this.createDefineCommand());
     this.commands.set('ascii', this.createASCIICommand());
     this.commands.set('remind', this.createRemindCommand());
-    this.commands.set('voicemaster', voicemasterCommand);
+    
+    // Advanced systems
+    this.commands.set('voicemaster', this.voicemasterSystem.createVoicemasterCommand());
+    this.commands.set('logging', this.loggingSystem.createLoggingCommand());
 
     // Add all the new advanced commands
     this.commands.set('prefix', this.createPrefixCommand());
@@ -3505,6 +3516,10 @@ export class EnhancedDiscordBot {
       // Register slash commands
       console.log(`Registering ${this.commands.size} enhanced slash commands...`);
       await this.registerCommands();
+      
+      // Initialize advanced systems
+      await this.voicemasterSystem.setupEventHandlers();
+      await this.loggingSystem.setupEventHandlers();
     });
 
     // Handle slash command interactions
@@ -4374,12 +4389,12 @@ export class EnhancedDiscordBot {
         .setTimestamp();
       
       await interaction.reply({ embeds: [embed], ephemeral: true });
-    } else if (customId.startsWith('voice_')) {
+    } else if (customId.startsWith('voice_') || customId.startsWith('voicemaster_')) {
       // Handle voice control buttons
-      await this.handleVoiceButton(interaction);
-    } else if (customId.startsWith('logging_')) {
+      await this.voicemasterSystem.handleVoicemasterButton(interaction);
+    } else if (customId.startsWith('logging_') || customId.startsWith('set_')) {
       // Handle logging configuration buttons
-      await this.handleLoggingButton(interaction);
+      await this.loggingSystem.handleLoggingButton(interaction);
     }
   }
 
@@ -5538,6 +5553,17 @@ export class EnhancedDiscordBot {
           await interaction.reply({ embeds: [embed] });
         } catch (error: any) {
           await interaction.reply({ content: `❌ Failed to transfer ownership: ${error.message}`, ephemeral: true });
+        }
+        break;
+        
+      default:
+        // Check if it's a voicemaster or logging modal
+        if (customId.startsWith('voicemaster_') || customId.startsWith('voice_modal_')) {
+          await this.voicemasterSystem.handleVoicemasterModal(interaction);
+        } else if (customId.startsWith('channel_modal_')) {
+          await this.loggingSystem.handleModalInteraction(interaction);
+        } else {
+          await interaction.reply({ content: '❌ Unknown modal interaction.', ephemeral: true });
         }
         break;
     }
