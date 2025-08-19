@@ -1433,15 +1433,22 @@ export class EnhancedDiscordBot {
         } else {
           // Show all commands overview with buttons
           const commandCategories = {
-            '🎵 Music': ['music - Advanced music bot with voice functionality'],
-            '🤖 AI & Utility': ['ai - AI-powered features using OpenAI', 'lyrics - Look up song lyrics', 'urban - Urban Dictionary lookup'],
-            '🛡️ Moderation': ['mod - Advanced moderation tools', 'clear - Clear messages', 'timeout - Timeout users', 'warn - Warn users'],
-            '👥 Server Management': ['role - Role management system', 'serverinfo - Server information', 'userinfo - User information'],
-            '🎮 Games & Fun': ['fun - Games and entertainment', 'blackjack - Blackjack game', 'coinflip - Coin flip game'],
-            '🌐 Information': ['weather - Weather information', 'news - Latest news headlines', 'avatar - User avatars'],
-            '⚙️ Bot Controls': ['botinfo - Bot information', 'ping - Bot latency', 'help - This help menu'],
-            '💤 Utility': ['afk - Set AFK status'],
-            '🔊 Voice': ['voicemaster - Complete voice channel management']
+            '🎵 Music & Audio': ['music - Advanced music bot with voice functionality', 'lyrics - Look up song lyrics', 'lastfm - Last.fm integration for music'],
+            '🤖 AI & Intelligence': ['ai - AI-powered features using OpenAI'],
+            '🛡️ Moderation & Safety': ['mod - Advanced moderation tools', 'clear - Clear messages', 'timeout - Timeout users', 'warn - Warn users', 'antinuke - Anti-nuke protection'],
+            '👥 Server Management': ['role - Role management system', 'serverinfo - Server information', 'userinfo - User information', 'prefix - Server prefix settings', 'logging - Configure server logging'],
+            '🎮 Games & Entertainment': ['fun - Games and entertainment', 'blackjack - Blackjack game', 'coinflip - Coin flip game', 'rps - Rock Paper Scissors', 'roll - Dice rolling'],
+            '😂 Fun & Memes': ['meme - Random memes', 'joke - Random jokes', 'dadjoke - Dad jokes', 'catfact - Cat facts', 'chuck - Chuck Norris facts', 'hug - Send virtual hugs'],
+            '🌐 Information & Search': ['weather - Weather information', 'news - Latest news headlines', 'wiki - Wikipedia search', 'urban - Urban Dictionary lookup', 'define - Dictionary definitions'],
+            '🔧 Utility & Tools': ['avatar - User avatars', 'qr - QR code generator', 'math - Calculator', 'color - Color information', 'password - Password generator', 'shorten - URL shortener'],
+            '📚 Educational': ['quote - Inspirational quotes', 'fact - Random facts', 'numbertrivia - Number trivia', 'space - Space facts'],
+            '⚙️ Bot Management': ['botinfo - Bot information', 'ping - Bot latency', 'help - This help menu', 'reload - Restart bot (owner only)', 'servers - Server management (owner only)'],
+            '💤 Personal': ['afk - Set AFK status', 'remind - Set reminders'],
+            '🔊 Voice Control': ['voicemaster - Complete voice channel management'],
+            '🎨 Creative': ['ascii - ASCII art generator'],
+            '🏆 Community': ['starboard - Star message system', 'halloffame - Hall of fame', 'hallofshame - Hall of shame', 'reactionroles - Reaction role system', 'joingate - Join gate system'],
+            '📊 Leveling & Stats': ['level - User leveling system', 'leaderboard - Server leaderboards', 'counters - Server counters'],
+            '🎁 Events & Social': ['giveaway - Giveaway system', 'bumpreminder - Bump reminders', 'webhook - Webhook management']
           };
 
           const embed = new EmbedBuilder()
@@ -1558,6 +1565,7 @@ export class EnhancedDiscordBot {
     this.commands.set('giveaway', this.createGiveawayCommand());
     this.commands.set('webhook', this.createWebhookCommand());
     this.commands.set('servers', this.createServerManagementCommand());
+    this.commands.set('commands', this.createAllCommandsCommand());
   }
 
   // ============================================================================
@@ -4863,6 +4871,302 @@ export class EnhancedDiscordBot {
         ephemeral: true 
       });
     }
+  }
+
+  // ============================================================================
+  // COMPREHENSIVE COMMAND LIST COMMAND
+  // ============================================================================
+  
+  private createAllCommandsCommand(): Command {
+    return {
+      data: new SlashCommandBuilder()
+        .setName('commands')
+        .setDescription('📋 Complete list of all available commands with descriptions')
+        .addStringOption(option =>
+          option.setName('category')
+            .setDescription('Filter by command category')
+            .setRequired(false)
+            .addChoices(
+              { name: 'Music & Audio', value: 'music' },
+              { name: 'AI & Intelligence', value: 'ai' },
+              { name: 'Moderation & Safety', value: 'moderation' },
+              { name: 'Server Management', value: 'management' },
+              { name: 'Games & Entertainment', value: 'games' },
+              { name: 'Fun & Memes', value: 'fun' },
+              { name: 'Information & Search', value: 'info' },
+              { name: 'Utility & Tools', value: 'utility' },
+              { name: 'Voice Control', value: 'voice' },
+              { name: 'Bot Management', value: 'bot' }
+            )),
+      execute: async (interaction) => {
+        const category = interaction.options.getString('category');
+        
+        if (category) {
+          await this.showCategoryCommands(interaction, category);
+        } else {
+          await this.showAllCommands(interaction);
+        }
+      }
+    };
+  }
+  
+  private async showAllCommands(interaction: any) {
+    const allCommands = {
+      '🎵 Music & Audio': {
+        'music': 'Advanced music bot with voice functionality (play, pause, queue, skip, etc.)',
+        'lyrics': 'Look up song lyrics using Genius API',
+        'lastfm': 'Last.fm integration for music statistics and now playing'
+      },
+      '🤖 AI & Intelligence': {
+        'ai': 'AI-powered features: chat, image generation, analysis, and summarization'
+      },
+      '🛡️ Moderation & Safety': {
+        'mod': 'Advanced moderation tools: massban, cleanup, quarantine, automod',
+        'clear': 'Clear/purge messages from channels',
+        'timeout': 'Timeout users for specified duration',
+        'warn': 'Warn users and track warning history',
+        'antinuke': 'Anti-nuke protection for server security'
+      },
+      '👥 Server Management': {
+        'role': 'Complete role management: add, remove, create, delete, presets',
+        'serverinfo': 'Detailed server information and statistics',
+        'userinfo': 'User information, join date, roles, and activity',
+        'prefix': 'Configure server command prefix',
+        'logging': 'Setup and configure server logging'
+      },
+      '🎮 Games & Entertainment': {
+        'fun': 'Collection of games and entertainment commands',
+        'blackjack': 'Interactive blackjack game with buttons',
+        'coinflip': 'Flip a coin with heads or tails',
+        'rps': 'Rock Paper Scissors game',
+        'roll': 'Roll dice with customizable sides'
+      },
+      '😂 Fun & Memes': {
+        'meme': 'Random memes from popular sources',
+        'joke': 'Random jokes and humor',
+        'dadjoke': 'Classic dad jokes',
+        'catfact': 'Random cat facts',
+        'chuck': 'Chuck Norris facts',
+        'hug': 'Send virtual hugs to users'
+      },
+      '🌐 Information & Search': {
+        'weather': 'Current weather information for any location',
+        'news': 'Latest news headlines from multiple sources',
+        'wiki': 'Wikipedia article search and summaries',
+        'urban': 'Urban Dictionary definitions',
+        'define': 'Dictionary definitions and word meanings'
+      },
+      '🔧 Utility & Tools': {
+        'avatar': 'Display user avatars and profile pictures',
+        'qr': 'Generate QR codes for text or URLs',
+        'math': 'Calculator for mathematical expressions',
+        'color': 'Color information and hex code details',
+        'password': 'Generate secure random passwords',
+        'shorten': 'Shorten long URLs'
+      },
+      '📚 Educational': {
+        'quote': 'Inspirational and motivational quotes',
+        'fact': 'Random interesting facts',
+        'numbertrivia': 'Trivia about numbers and mathematics',
+        'space': 'Space facts and astronomy information'
+      },
+      '⚙️ Bot Management': {
+        'botinfo': 'Bot statistics, uptime, and system information',
+        'ping': 'Bot latency and connection status',
+        'help': 'Interactive help menu with categories',
+        'reload': 'Restart the bot (owner only)',
+        'servers': 'Server management for bot owner (list, join, leave, info)'
+      },
+      '💤 Personal': {
+        'afk': 'Set away-from-keyboard status with reason',
+        'remind': 'Set personal reminders with timestamps'
+      },
+      '🔊 Voice Control': {
+        'voicemaster': 'Complete voice channel management: lock, unlock, limit, rename, invite, kick, transfer ownership'
+      },
+      '🎨 Creative': {
+        'ascii': 'Generate ASCII art from text'
+      },
+      '🏆 Community Features': {
+        'starboard': 'Star message system for highlighting popular messages',
+        'halloffame': 'Hall of fame for notable members',
+        'hallofshame': 'Hall of shame for problematic behavior',
+        'reactionroles': 'Reaction-based role assignment system',
+        'joingate': 'Join gate system for new member verification'
+      },
+      '📊 Leveling & Stats': {
+        'level': 'User leveling system with XP and ranks',
+        'leaderboard': 'Server leaderboards for various activities',
+        'counters': 'Server counters for tracking statistics'
+      },
+      '🎁 Events & Social': {
+        'giveaway': 'Giveaway system for events and prizes',
+        'bumpreminder': 'Automatic bump reminders for server promotion',
+        'webhook': 'Webhook management and configuration'
+      }
+    };
+    
+    const totalCommands = Object.values(allCommands).reduce((total, category) => total + Object.keys(category).length, 0);
+    
+    const embed = new EmbedBuilder()
+      .setColor('#5865F2')
+      .setTitle('📋 Complete Command Reference')
+      .setDescription(`**${this.client.user?.tag}** - All ${totalCommands} available commands\n\n**Usage:** \`/command\` or \`${config.DEFAULT_PREFIX}command\`\n**Detailed Help:** \`/help [command]\` or \`/commands [category]\``)
+      .setThumbnail(this.client.user?.displayAvatarURL() || null);
+      
+    Object.entries(allCommands).forEach(([categoryName, commands]) => {
+      const commandList = Object.entries(commands)
+        .map(([cmd, desc]) => `\`/${cmd}\` - ${desc}`)
+        .join('\n');
+      
+      embed.addFields({
+        name: categoryName,
+        value: commandList,
+        inline: false
+      });
+    });
+    
+    embed.setFooter({ text: `Total: ${totalCommands} commands | Both / and ${config.DEFAULT_PREFIX} prefixes supported` })
+         .setTimestamp();
+    
+    // Split into multiple embeds if too long
+    if (embed.data.fields && embed.data.fields.length > 10) {
+      const embeds = [];
+      const fields = embed.data.fields;
+      
+      for (let i = 0; i < fields.length; i += 5) {
+        const pageEmbed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle(`📋 Command Reference (Page ${Math.floor(i/5) + 1}/${Math.ceil(fields.length/5)})`)
+          .setDescription(embed.data.description || '')
+          .addFields(fields.slice(i, i + 5))
+          .setFooter({ text: `Page ${Math.floor(i/5) + 1} | Total: ${totalCommands} commands` })
+          .setTimestamp();
+          
+        embeds.push(pageEmbed);
+      }
+      
+      await interaction.reply({ embeds: embeds.slice(0, 10), ephemeral: true });
+    } else {
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+  }
+  
+  private async showCategoryCommands(interaction: any, category: string) {
+    const categoryCommands: Record<string, Record<string, string>> = {
+      'music': {
+        'music play': 'Play music from YouTube, Spotify, or search query',
+        'music join': 'Join your voice channel',
+        'music leave': 'Leave the voice channel and stop playing',
+        'music queue': 'Show the current music queue',
+        'music skip': 'Skip the current song',
+        'music pause': 'Pause the current song',
+        'music resume': 'Resume paused music',
+        'music volume': 'Set playback volume (0-100)',
+        'music shuffle': 'Shuffle the music queue',
+        'music loop': 'Toggle loop modes (off/song/queue)',
+        'lyrics': 'Look up song lyrics',
+        'lastfm': 'Last.fm music statistics and now playing'
+      },
+      'moderation': {
+        'mod massban': 'Ban multiple users at once',
+        'mod cleanup': 'Clean up messages with filters',
+        'mod quarantine': 'Remove all roles from a user',
+        'mod automod': 'Configure auto-moderation settings',
+        'clear': 'Clear messages from channel',
+        'timeout': 'Timeout users for specified duration',
+        'warn': 'Warn users and track warnings',
+        'antinuke': 'Configure anti-nuke protection'
+      },
+      'games': {
+        'blackjack': 'Play interactive blackjack',
+        'coinflip': 'Flip a coin',
+        'rps': 'Rock Paper Scissors',
+        'roll': 'Roll dice with custom sides',
+        'fun': 'Access various entertainment commands'
+      },
+      'voice': {
+        'voicemaster setup': 'Setup join-to-create voice channels',
+        'voicemaster lock': 'Lock your voice channel',
+        'voicemaster unlock': 'Unlock your voice channel',
+        'voicemaster limit': 'Set user limit for your channel',
+        'voicemaster name': 'Rename your voice channel',
+        'voicemaster invite': 'Invite user to your channel',
+        'voicemaster kick': 'Kick user from your channel',
+        'voicemaster transfer': 'Transfer channel ownership',
+        'voicemaster menu': 'Interactive voice control panel'
+      },
+      'utility': {
+        'avatar': 'Display user avatars',
+        'qr': 'Generate QR codes',
+        'math': 'Mathematical calculator',
+        'color': 'Color information and previews',
+        'password': 'Generate secure passwords',
+        'shorten': 'URL shortening service'
+      },
+      'info': {
+        'weather': 'Weather information for locations',
+        'news': 'Latest news headlines',
+        'wiki': 'Wikipedia search and summaries',
+        'urban': 'Urban Dictionary lookup',
+        'define': 'Dictionary definitions'
+      },
+      'bot': {
+        'botinfo': 'Bot statistics and information',
+        'ping': 'Bot latency test',
+        'help': 'Interactive help system',
+        'reload': 'Restart bot (owner only)',
+        'servers': 'Server management (owner only)'
+      },
+      'management': {
+        'role': 'Role management system',
+        'serverinfo': 'Server information and stats',
+        'userinfo': 'User information and details',
+        'prefix': 'Configure command prefix',
+        'logging': 'Setup server logging'
+      },
+      'fun': {
+        'meme': 'Random memes',
+        'joke': 'Random jokes',
+        'dadjoke': 'Dad jokes',
+        'catfact': 'Cat facts',
+        'chuck': 'Chuck Norris facts',
+        'hug': 'Virtual hugs'
+      },
+      'ai': {
+        'ai chat': 'Chat with AI assistant',
+        'ai image': 'Generate images with AI',
+        'ai analyze': 'Analyze images with AI',
+        'ai summarize': 'Summarize text with AI'
+      }
+    };
+    
+    const commands = categoryCommands[category];
+    if (!commands) {
+      return await interaction.reply({ 
+        content: '❌ Category not found. Use `/commands` to see all categories.', 
+        ephemeral: true 
+      });
+    }
+    
+    const embed = new EmbedBuilder()
+      .setColor('#5865F2')
+      .setTitle(`📋 ${category.charAt(0).toUpperCase() + category.slice(1)} Commands`)
+      .setDescription(`Complete list of ${category} commands with usage information\n\n**Usage:** \`/command\` or \`${config.DEFAULT_PREFIX}command\``)
+      .setThumbnail(this.client.user?.displayAvatarURL() || null);
+      
+    Object.entries(commands).forEach(([cmd, desc]) => {
+      embed.addFields({
+        name: `/${cmd}`,
+        value: desc,
+        inline: false
+      });
+    });
+    
+    embed.setFooter({ text: `${Object.keys(commands).length} commands in this category` })
+         .setTimestamp();
+    
+    await interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
   // ============================================================================
