@@ -17,6 +17,8 @@ import {
 import { storage } from './storage';
 import { config } from './config';
 import axios from 'axios';
+import { LoggingSystem } from './logging-system';
+import { VoicemasterSystem } from './voicemaster-system';
 // Import music libraries (fixed imports)
 import * as play from 'play-dl';
 import Genius from 'genius-lyrics';
@@ -48,7 +50,7 @@ export class EnhancedDiscordBot {
   private voiceConnections: Map<string, VoiceConnection>;
   private blackjackGames: Map<string, any>;
   private cooldowns: Map<string, Map<string, number>>;
-  private System: System;
+  private voicemasterSystem: VoicemasterSystem;
   private loggingSystem: LoggingSystem;
 
   constructor() {
@@ -65,7 +67,7 @@ export class EnhancedDiscordBot {
     this.voiceConnections = new Map();
     this.blackjackGames = new Map();
     this.cooldowns = new Map();
-    this.System = new System(this.client);
+    this.voicemasterSystem = new VoicemasterSystem(this.client);
     this.loggingSystem = new LoggingSystem(this.client);
     
     this.setupCommands();
@@ -210,131 +212,110 @@ export class EnhancedDiscordBot {
         }
       }
     };
-// Register command
-const commands = [
-  new SlashCommandBuilder()
-    .setName("voicemenu")
-    .setDescription("VoiceMaster control panel")
-].map(command => command.toJSON());
 
-const rest = new REST({ version: "10" }).setToken(TOKEN);
+    this.commands.set(musicCommand.data.name, musicCommand);
+  }
 
-(async () => {
-  try {
-    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
-      body: commands,
+  private setupEventListeners() {
+    this.client.once('ready', (c) => {
+      console.log(`✅ Logged in as ${c.user.tag}`);
     });
-    console.log("✅ Commands registered.");
-  } catch (err) {
-    console.error(err);
-  }
-})();
 
-client.once(Events.ClientReady, (c) => {
-  console.log(`✅ Logged in as ${c.user.tag}`);
-});
+    this.client.on('interactionCreate', async (interaction) => {
+      if (!interaction.isChatInputCommand()) return;
 
-    // ============================================================================
-    // VoiceMaster
-    // ============================================================================
-    
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+      if (interaction.commandName === "voicemenu") {
+        const embed = new EmbedBuilder()
+          .setTitle("🎙️ VoiceMaster Controls")
+          .setDescription("Manage your temporary voice channel with these buttons.")
+          .setColor(0x2f3136);
 
-  if (interaction.commandName === "voicemenu") {
-    const embed = new EmbedBuilder()
-      .setTitle("🎙️ VoiceMaster Controls")
-      .setDescription("Manage your temporary voice channel with these buttons.")
-      .setColor(0x2f3136);
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder().setCustomId("lock").setLabel("🔒 Lock").setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId("unlock").setLabel("🔓 Unlock").setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId("limit").setLabel("👥 Set Limit").setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId("rename").setLabel("✏️ Rename").setStyle(ButtonStyle.Secondary),
+        );
 
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId("lock").setLabel("🔒 Lock").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId("unlock").setLabel("🔓 Unlock").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("limit").setLabel("👥 Set Limit").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("rename").setLabel("✏️ Rename").setStyle(ButtonStyle.Secondary),
-    );
+        const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder().setCustomId("kick").setLabel("👢 Kick User").setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId("invite").setLabel("➕ Invite User").setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId("transfer").setLabel("👑 Transfer Crown").setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId("newvc").setLabel("📂 New VC").setStyle(ButtonStyle.Secondary),
+        );
 
-    const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId("kick").setLabel("👢 Kick User").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId("invite").setLabel("➕ Invite User").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("transfer").setLabel("👑 Transfer Crown").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("newvc").setLabel("📂 New VC").setStyle(ButtonStyle.Secondary),
-    );
-
-    await interaction.reply({ embeds: [embed], components: [row, row2], ephemeral: true });
-  }
-});
-
-// Button handler
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isButton()) return;
-
-  const member = interaction.member as GuildMember;
-  const channel = member.voice.channel;
-
-  if (!channel) {
-    await interaction.reply({ content: "❌ You must be in a voice channel to use this.", ephemeral: true });
-    return;
-  }
-
-  switch (interaction.customId) {
-    case "lock":
-      await channel.permissionOverwrites.edit(interaction.guild!.roles.everyone, {
-        Connect: false,
-      });
-      await interaction.reply({ content: "🔒 Voice channel locked!", ephemeral: true });
-      break;
-
-    case "unlock":
-      await channel.permissionOverwrites.edit(interaction.guild!.roles.everyone, {
-        Connect: true,
-      });
-      await interaction.reply({ content: "🔓 Voice channel unlocked!", ephemeral: true });
-      break;
-
-    case "limit":
-      await channel.setUserLimit(2); // Example: set to 2, you could add a modal/input
-      await interaction.reply({ content: "👥 User limit set to 2!", ephemeral: true });
-      break;
-
-    case "rename":
-      await channel.setName(`Custom VC ${Date.now()}`);
-      await interaction.reply({ content: "✏️ Channel renamed!", ephemeral: true });
-      break;
-
-    case "kick":
-      if (channel.members.size > 1) {
-        const target = channel.members.filter(m => m.id !== member.id).first();
-        if (target) {
-          await target.voice.disconnect("Kicked by VoiceMaster");
-          await interaction.reply({ content: `👢 Kicked ${target.user.tag}`, ephemeral: true });
-        }
-      } else {
-        await interaction.reply({ content: "❌ No one to kick.", ephemeral: true });
+        await interaction.reply({ embeds: [embed], components: [row, row2], ephemeral: true });
       }
-      break;
+    });
 
-    case "invite":
-      await interaction.reply({ content: "➕ Use right-click > Invite to VC (API limit).", ephemeral: true });
-      break;
+    // Button handler
+    this.client.on('interactionCreate', async (interaction) => {
+      if (!interaction.isButton()) return;
 
-    case "transfer":
-      await interaction.reply({ content: "👑 Crown transfer feature requires DB tracking.", ephemeral: true });
-      break;
+      const member = interaction.member as GuildMember;
+      const channel = member.voice.channel;
 
-    case "newvc":
-      const newChannel = await channel.guild.channels.create({
-        name: `New VC by ${member.user.username}`,
-        type: 2, // voice channel
-        parent: channel.parent ?? undefined,
-      });
-      await member.voice.setChannel(newChannel);
-      await interaction.reply({ content: `📂 Created and moved you to <#${newChannel.id}>`, ephemeral: true });
-      break;
-  }
-});
+      if (!channel) {
+        await interaction.reply({ content: "❌ You must be in a voice channel to use this.", ephemeral: true });
+        return;
+      }
 
-client.login(TOKEN);
+      switch (interaction.customId) {
+        case "lock":
+          await channel.permissionOverwrites.edit(interaction.guild!.roles.everyone, {
+            Connect: false,
+          });
+          await interaction.reply({ content: "🔒 Voice channel locked!", ephemeral: true });
+          break;
+
+        case "unlock":
+          await channel.permissionOverwrites.edit(interaction.guild!.roles.everyone, {
+            Connect: true,
+          });
+          await interaction.reply({ content: "🔓 Voice channel unlocked!", ephemeral: true });
+          break;
+
+        case "limit":
+          await channel.setUserLimit(2); // Example: set to 2, you could add a modal/input
+          await interaction.reply({ content: "👥 User limit set to 2!", ephemeral: true });
+          break;
+
+        case "rename":
+          await channel.setName(`Custom VC ${Date.now()}`);
+          await interaction.reply({ content: "✏️ Channel renamed!", ephemeral: true });
+          break;
+
+        case "kick":
+          if (channel.members.size > 1) {
+            const target = channel.members.filter(m => m.id !== member.id).first();
+            if (target) {
+              await target.voice.disconnect("Kicked by VoiceMaster");
+              await interaction.reply({ content: `👢 Kicked ${target.user.tag}`, ephemeral: true });
+            }
+          } else {
+            await interaction.reply({ content: "❌ No one to kick.", ephemeral: true });
+          }
+          break;
+
+        case "invite":
+          await interaction.reply({ content: "➕ Use right-click > Invite to VC (API limit).", ephemeral: true });
+          break;
+
+        case "transfer":
+          await interaction.reply({ content: "👑 Crown transfer feature requires DB tracking.", ephemeral: true });
+          break;
+
+        case "newvc":
+          const newChannel = await channel.guild.channels.create({
+            name: `New VC by ${member.user.username}`,
+            type: 2, // voice channel
+            parent: channel.parent ?? undefined,
+          });
+          await member.voice.setChannel(newChannel);
+          await interaction.reply({ content: `📂 Created and moved you to <#${newChannel.id}>`, ephemeral: true });
+          break;
+      }
+    });
     // ============================================================================
     // OPENAI COMMANDS (AI-Powered features)
     // ============================================================================
