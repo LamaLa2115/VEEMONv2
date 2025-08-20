@@ -3581,7 +3581,6 @@ export class EnhancedDiscordBot {
       await this.registerCommands();
       
       // Initialize advanced systems  
-      // await this.voicemasterSystem.setupVoiceStateHandler();
       await this.loggingSystem.setupEventHandlers();
     });
 
@@ -4452,9 +4451,36 @@ export class EnhancedDiscordBot {
         .setTimestamp();
       
       await interaction.reply({ embeds: [embed], ephemeral: true });
-    } else if (customId.startsWith('voice_') || customId.startsWith('_')) {
-      // Handle voice control buttons
-      await this.System.handleButton(interaction);
+    } else if (customId.startsWith('voice_')) {
+      // Handle voice control buttons - route to the correct handler
+      switch (customId) {
+        case 'voice_lock':
+          await this.handleVoiceLockButton(interaction);
+          break;
+        case 'voice_unlock':
+          await this.handleVoiceUnlockButton(interaction);
+          break;
+        case 'voice_limit':
+          await this.handleVoiceLimitButton(interaction);
+          break;
+        case 'voice_rename':
+          await this.handleVoiceRenameButton(interaction);
+          break;
+        case 'voice_status':
+          await this.handleVoiceStatusButton(interaction);
+          break;
+        case 'voice_kick':
+          await this.handleVoiceKickButton(interaction);
+          break;
+        case 'voice_transfer':
+          await this.handleVoiceTransferButton(interaction);
+          break;
+        case 'voice_refresh':
+          await this.handleVoiceRefreshButton(interaction);
+          break;
+        default:
+          await interaction.reply({ content: '❌ Unknown voice control button.', ephemeral: true });
+      }
     } else if (customId.startsWith('logging_') || customId.startsWith('set_')) {
       // Handle logging configuration buttons
       await this.loggingSystem.handleLoggingButton(interaction);
@@ -5646,11 +5672,10 @@ export class EnhancedDiscordBot {
         break;
         
       default:
-        // Check if it's a  or logging modal
-        if (customId.startsWith('_') || customId.startsWith('voice_modal_')) {
-          await this.System.handleModal(interaction);
-        } else if (customId.startsWith('channel_modal_')) {
-          await this.loggingSystem.handleModalInteraction(interaction);
+        // Check if it's a logging modal
+        if (customId.startsWith('channel_modal_')) {
+          // Handle logging modals if needed
+          await interaction.reply({ content: '❌ Modal handling not yet implemented.', ephemeral: true });
         } else {
           await interaction.reply({ content: '❌ Unknown modal interaction.', ephemeral: true });
         }
