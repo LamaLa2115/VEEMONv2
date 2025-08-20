@@ -1,0 +1,76 @@
+🎵 Music & Audio
+music - Advanced music bot with voice functionality
+lyrics - Look up song lyrics
+lastfm - Last.fm integration for music
+🤖 AI & Intelligence
+ai - AI-powered features using OpenAI
+🛡️ Moderation & Safety
+mod - Advanced moderation tools
+clear - Clear messages
+timeout - Timeout users
+warn - Warn users
+antinuke - Anti-nuke protection
+👥 Server Management
+role - Role management system
+serverinfo - Server information
+userinfo - User information
+prefix - Server prefix settings
+logging - Configure server logging
+🎮 Games & Entertainment
+fun - Games and entertainment
+blackjack - Blackjack game
+coinflip - Coin flip game
+rps - Rock Paper Scissors
+roll - Dice rolling
+😂 Fun & Memes
+meme - Random memes
+joke - Random jokes
+dadjoke - Dad jokes
+catfact - Cat facts
+chuck - Chuck Norris facts
+hug - Send virtual hugs
+🌐 Information & Search
+weather - Weather information
+news - Latest news headlines
+wiki - Wikipedia search
+urban - Urban Dictionary lookup
+define - Dictionary definitions
+🔧 Utility & Tools
+avatar - User avatars
+qr - QR code generator
+math - Calculator
+color - Color information
+password - Password generator
+shorten - URL shortener
+📚 Educational
+quote - Inspirational quotes
+fact - Random facts
+numbertrivia - Number trivia
+space - Space facts
+⚙️ Bot Management
+botinfo - Bot information
+ping - Bot latency
+help - This help menu
+reload - Restart bot (owner only)
+servers - Server management (owner only)
+💤 Personal
+afk - Set AFK status
+remind - Set reminders
+🔊 Voice Control
+voicemaster - Complete voice channel management
+🎨 Creative
+ascii - ASCII art generator
+🏆 Community
+starboard - Star message system
+halloffame - Hall of fame
+hallofshame - Hall of shame
+reactionroles - Reaction role system
+joingate - Join gate system
+📊 Leveling & Stats
+level - User leveling system
+leaderboard - Server leaderboards
+counters - Server counters
+🎁 Events & Social
+giveaway - Giveaway system
+bumpreminder - Bump reminders
+webhook - Webhook management
