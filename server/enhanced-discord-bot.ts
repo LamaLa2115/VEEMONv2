@@ -213,13 +213,9 @@ export class EnhancedDiscordBot {
       }
     };
 
-    this.commands.set(musicCommand.data.name, musicCommand);
-  }
-
-  private setupEventListeners() {
-    this.client.once('ready', (c) => {
-      console.log(`✅ Logged in as ${c.user.tag}`);
-    });
+    // ============================================================================
+    // AI COMMANDS (OpenAI Integration)  
+    // ============================================================================
 
     this.client.on('interactionCreate', async (interaction) => {
       if (!interaction.isChatInputCommand()) return;
@@ -1143,10 +1139,10 @@ export class EnhancedDiscordBot {
       }
     };
 
-    //  Command - Complete voice channel management system
-    const Command: Command = {
+    //  VoiceMaster Command - Complete voice channel management system
+    const voicemasterCommand: Command = {
       data: new SlashCommandBuilder()
-        .setName('')
+        .setName('voicemaster')
         .setDescription('🔊 Complete voice channel management system')
         .addSubcommand(subcommand =>
           subcommand
@@ -1609,7 +1605,7 @@ export class EnhancedDiscordBot {
     };
 
     // Add all commands to the collection
-    this.commands.set('music', musicCommand);
+    this.commands.set(musicCommand.data.name, musicCommand);
     this.commands.set('ai', openaiCommand);
     this.commands.set('lyrics', lyricsCommand);
     this.commands.set('fun', funCommand);
@@ -1659,13 +1655,13 @@ export class EnhancedDiscordBot {
     this.commands.set('ascii', this.createASCIICommand());
     this.commands.set('remind', this.createRemindCommand());
     
-    // Advanced systems
-    this.commands.set('', this.System.createCommand());
-    this.commands.set('logging', this.loggingSystem.createLoggingCommand());
+    // Advanced systems - TODO: Fix these later
+    // this.commands.set('voicemaster', this.voicemasterSystem.createCommand());
+    // this.commands.set('logging', this.loggingSystem.createLoggingCommand());
 
     // Add all the new advanced commands
     this.commands.set('prefix', this.createPrefixCommand());
-    this.commands.set('logging', this.createLoggingCommand());
+    // this.commands.set('logging', this.createLoggingCommand()); // Avoid duplicate
     this.commands.set('antinuke', this.createAntiNukeCommand());
     this.commands.set('lastfm', this.createLastFMCommand());
     this.commands.set('starboard', this.createStarboardCommand());
@@ -3620,8 +3616,8 @@ export class EnhancedDiscordBot {
       console.log(`Registering ${this.commands.size} enhanced slash commands...`);
       await this.registerCommands();
       
-      // Initialize advanced systems
-      await this.System.setupEventHandlers();
+      // Initialize advanced systems  
+      // await this.voicemasterSystem.setupVoiceStateHandler();
       await this.loggingSystem.setupEventHandlers();
     });
 
