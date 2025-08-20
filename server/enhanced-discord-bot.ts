@@ -1615,7 +1615,7 @@ export class EnhancedDiscordBot {
     this.commands.set('role', roleCommand);
     this.commands.set('urban', urbanCommand);
     this.commands.set('blackjack', blackjackCommand);
-    // this.commands.set('voicemaster', voicemasterCommand); // TODO: Fix voicemaster command
+    this.commands.set('voicemaster', voicemasterCommand);
     // this.commands.set('logging', loggingCommand); // TODO: Fix logging command
     this.commands.set('help', enhancedHelpCommand);
     this.commands.set('ping', pingCommand);
