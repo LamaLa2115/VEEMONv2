@@ -1139,119 +1139,83 @@ export class EnhancedDiscordBot {
       }
     };
 
-    //  VoiceMaster Command - Complete voice channel management system
+    //  VoiceMaster Command - Button-based voice channel management
     const voicemasterCommand: Command = {
       data: new SlashCommandBuilder()
         .setName('voicemaster')
-        .setDescription('🔊 Complete voice channel management system')
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('lock')
-            .setDescription('🔒 Lock your voice channel'))
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('unlock')
-            .setDescription('🔓 Unlock your voice channel'))
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('limit')
-            .setDescription('👥 Set user limit for your voice channel')
-            .addIntegerOption(option =>
-              option.setName('max')
-                .setDescription('Maximum users (0 = no limit)')
-                .setRequired(true)
-                .setMinValue(0)
-                .setMaxValue(99)))
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('name')
-            .setDescription('📝 Change your voice channel name')
-            .addStringOption(option =>
-              option.setName('newname')
-                .setDescription('New channel name')
-                .setRequired(true)
-                .setMaxLength(100)))
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('invite')
-            .setDescription('➕ Invite a user to your voice channel')
-            .addUserOption(option =>
-              option.setName('user')
-                .setDescription('User to invite')
-                .setRequired(true)))
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('kick')
-            .setDescription('❌ Kick a user from your voice channel')
-            .addUserOption(option =>
-              option.setName('user')
-                .setDescription('User to kick')
-                .setRequired(true)))
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('transfer')
-            .setDescription('👑 Transfer channel ownership')
-            .addUserOption(option =>
-              option.setName('user')
-                .setDescription('New channel owner')
-                .setRequired(true)))
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('menu')
-            .setDescription('📋 Show interactive voice channel control menu'))
-        .addSubcommand(subcommand =>
-          subcommand
-            .setName('setup')
-            .setDescription('🎛️ Setup join-to-create channel')
-            .addChannelOption(option =>
-              option.setName('channel')
-                .setDescription('Voice channel to setup as join-to-create')
-                .setRequired(true)
-                .addChannelTypes(ChannelType.GuildVoice))),
+        .setDescription('🔊 Voice channel control panel with buttons')
+,
       execute: async (interaction) => {
-        // Bot owner bypass
-        if (!this.isSuperAdmin(interaction.user.id)) {
-          // Check if user is in a voice channel
-          const member = interaction.member as GuildMember;
-          if (!member.voice.channel) {
-            return await interaction.reply({ 
-              content: '❌ You must be in a voice channel to use  commands.', 
-              ephemeral: true 
-            });
-          }
+        const member = interaction.member as GuildMember;
+        
+        // Check if user is in a voice channel (bot owner bypass)
+        if (!this.isSuperAdmin(interaction.user.id) && !member.voice.channel) {
+          return await interaction.reply({ 
+            content: '❌ You must be in a voice channel to use VoiceMaster controls.', 
+            ephemeral: true 
+          });
         }
 
-        const subcommand = interaction.options.getSubcommand();
-        
-        switch (subcommand) {
-          case 'lock':
-            await this.handleVoiceLock(interaction);
-            break;
-          case 'unlock':
-            await this.handleVoiceUnlock(interaction);
-            break;
-          case 'limit':
-            await this.handleVoiceLimit(interaction);
-            break;
-          case 'name':
-            await this.handleVoiceName(interaction);
-            break;
-          case 'invite':
-            await this.handleVoiceInvite(interaction);
-            break;
-          case 'kick':
-            await this.handleVoiceKick(interaction);
-            break;
-          case 'transfer':
-            await this.handleVoiceTransfer(interaction);
-            break;
-          case 'menu':
-            await this.handleVoiceMenu(interaction);
-            break;
-          case 'setup':
-            await this.handleVoiceSetup(interaction);
-            break;
-        }
+        const channel = member.voice.channel;
+        const embed = new EmbedBuilder()
+          .setTitle('🎙️ VoiceMaster Control Panel')
+          .setDescription(`Managing voice channel: **${channel?.name || 'Unknown Channel'}**\n${channel ? `👥 **${channel.members.size}** members connected` : ''}`)
+          .setColor(0x5865F2)
+          .addFields([
+            { name: '🔒 Lock/Unlock', value: 'Control who can join', inline: true },
+            { name: '👥 User Limit', value: 'Set max members', inline: true },
+            { name: '📝 Rename', value: 'Change channel name', inline: true },
+            { name: '🎵 Status', value: 'Set voice activity status', inline: true },
+            { name: '👢 Kick Users', value: 'Remove members', inline: true },
+            { name: '👑 Transfer', value: 'Give ownership', inline: true }
+          ]);
+
+        // Create button rows
+        const row1 = new ActionRowBuilder<ButtonBuilder>()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId('voice_lock')
+              .setLabel('🔒 Lock')
+              .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+              .setCustomId('voice_unlock')
+              .setLabel('🔓 Unlock')
+              .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+              .setCustomId('voice_limit')
+              .setLabel('👥 Limit')
+              .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+              .setCustomId('voice_rename')
+              .setLabel('📝 Rename')
+              .setStyle(ButtonStyle.Secondary)
+          );
+
+        const row2 = new ActionRowBuilder<ButtonBuilder>()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId('voice_status')
+              .setLabel('🎵 Status')
+              .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+              .setCustomId('voice_kick')
+              .setLabel('👢 Kick')
+              .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+              .setCustomId('voice_transfer')
+              .setLabel('👑 Transfer')
+              .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+              .setCustomId('voice_refresh')
+              .setLabel('🔄 Refresh')
+              .setStyle(ButtonStyle.Secondary)
+          );
+
+        await interaction.reply({ 
+          embeds: [embed], 
+          components: [row1, row2], 
+          ephemeral: true 
+        });
       }
     };
 
@@ -4612,6 +4576,32 @@ export class EnhancedDiscordBot {
 
         await interaction.showModal(transferModal);
         break;
+      
+      // Voice control button handlers
+      case 'voice_lock':
+        await this.handleVoiceLockButton(interaction);
+        break;
+      case 'voice_unlock':
+        await this.handleVoiceUnlockButton(interaction);
+        break;
+      case 'voice_limit':
+        await this.handleVoiceLimitButton(interaction);
+        break;
+      case 'voice_rename':
+        await this.handleVoiceRenameButton(interaction);
+        break;
+      case 'voice_status':
+        await this.handleVoiceStatusButton(interaction);
+        break;
+      case 'voice_kick':
+        await this.handleVoiceKickButton(interaction);
+        break;
+      case 'voice_transfer':
+        await this.handleVoiceTransferButton(interaction);
+        break;
+      case 'voice_refresh':
+        await this.handleVoiceRefreshButton(interaction);
+        break;
     }
   }
 
@@ -6989,6 +6979,254 @@ export class EnhancedDiscordBot {
   
   public getCommands() {
     return this.commands;
+  }
+
+  // ============================================================================
+  // VOICE CONTROL BUTTON HANDLERS
+  // ============================================================================
+
+  private async handleVoiceLockButton(interaction: any) {
+    const member = interaction.member as GuildMember;
+    const channel = member.voice.channel;
+
+    if (!channel) {
+      return await interaction.reply({ 
+        content: '❌ You must be in a voice channel to use this feature.', 
+        ephemeral: true 
+      });
+    }
+
+    try {
+      await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, {
+        Connect: false,
+      });
+      await interaction.reply({ 
+        content: `🔒 **${channel.name}** has been locked! Only users with permissions can join.`, 
+        ephemeral: true 
+      });
+    } catch (error) {
+      await interaction.reply({ 
+        content: '❌ Failed to lock the voice channel. I may not have the required permissions.', 
+        ephemeral: true 
+      });
+    }
+  }
+
+  private async handleVoiceUnlockButton(interaction: any) {
+    const member = interaction.member as GuildMember;
+    const channel = member.voice.channel;
+
+    if (!channel) {
+      return await interaction.reply({ 
+        content: '❌ You must be in a voice channel to use this feature.', 
+        ephemeral: true 
+      });
+    }
+
+    try {
+      await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, {
+        Connect: true,
+      });
+      await interaction.reply({ 
+        content: `🔓 **${channel.name}** has been unlocked! Everyone can now join.`, 
+        ephemeral: true 
+      });
+    } catch (error) {
+      await interaction.reply({ 
+        content: '❌ Failed to unlock the voice channel. I may not have the required permissions.', 
+        ephemeral: true 
+      });
+    }
+  }
+
+  private async handleVoiceLimitButton(interaction: any) {
+    const modal = new ModalBuilder()
+      .setCustomId('voice_limit_modal')
+      .setTitle('Set Voice Channel User Limit');
+
+    const limitInput = new TextInputBuilder()
+      .setCustomId('user_limit_input')
+      .setLabel('User Limit (0 = no limit)')
+      .setStyle(TextInputStyle.Short)
+      .setMinLength(1)
+      .setMaxLength(2)
+      .setRequired(true)
+      .setPlaceholder('Enter 0-99');
+
+    const limitActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(limitInput);
+    modal.addComponents(limitActionRow);
+
+    await interaction.showModal(modal);
+  }
+
+  private async handleVoiceRenameButton(interaction: any) {
+    const modal = new ModalBuilder()
+      .setCustomId('voice_rename_modal')
+      .setTitle('Rename Voice Channel');
+
+    const nameInput = new TextInputBuilder()
+      .setCustomId('channel_name_input')
+      .setLabel('New Channel Name')
+      .setStyle(TextInputStyle.Short)
+      .setMinLength(1)
+      .setMaxLength(100)
+      .setRequired(true)
+      .setPlaceholder('Enter new channel name');
+
+    const nameActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(nameInput);
+    modal.addComponents(nameActionRow);
+
+    await interaction.showModal(modal);
+  }
+
+  private async handleVoiceStatusButton(interaction: any) {
+    const modal = new ModalBuilder()
+      .setCustomId('voice_status_modal')
+      .setTitle('Set Voice Channel Status');
+
+    const statusInput = new TextInputBuilder()
+      .setCustomId('channel_status_input')
+      .setLabel('Voice Activity Status')
+      .setStyle(TextInputStyle.Short)
+      .setMinLength(1)
+      .setMaxLength(500)
+      .setRequired(true)
+      .setPlaceholder('What are you doing? (e.g., "Playing games", "Studying", "Music session")');
+
+    const statusActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(statusInput);
+    modal.addComponents(statusActionRow);
+
+    await interaction.showModal(modal);
+  }
+
+  private async handleVoiceKickButton(interaction: any) {
+    const member = interaction.member as GuildMember;
+    const channel = member.voice.channel;
+
+    if (!channel) {
+      return await interaction.reply({ 
+        content: '❌ You must be in a voice channel to use this feature.', 
+        ephemeral: true 
+      });
+    }
+
+    const otherMembers = channel.members.filter(m => m.id !== member.id);
+    
+    if (otherMembers.size === 0) {
+      return await interaction.reply({ 
+        content: '❌ No other members in the voice channel to kick.', 
+        ephemeral: true 
+      });
+    }
+
+    const modal = new ModalBuilder()
+      .setCustomId('voice_kick_modal')
+      .setTitle('Kick User from Voice Channel');
+
+    const userInput = new TextInputBuilder()
+      .setCustomId('kick_user_input')
+      .setLabel('User to Kick (@mention or ID)')
+      .setStyle(TextInputStyle.Short)
+      .setMinLength(1)
+      .setMaxLength(100)
+      .setRequired(true)
+      .setPlaceholder('@username or user ID');
+
+    const userActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(userInput);
+    modal.addComponents(userActionRow);
+
+    await interaction.showModal(modal);
+  }
+
+  private async handleVoiceTransferButton(interaction: any) {
+    const modal = new ModalBuilder()
+      .setCustomId('voice_transfer_modal')
+      .setTitle('Transfer Voice Channel Ownership');
+
+    const userInput = new TextInputBuilder()
+      .setCustomId('transfer_user_input')
+      .setLabel('New Owner (@mention or ID)')
+      .setStyle(TextInputStyle.Short)
+      .setMinLength(1)
+      .setMaxLength(100)
+      .setRequired(true)
+      .setPlaceholder('@username or user ID');
+
+    const transferActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(userInput);
+    modal.addComponents(transferActionRow);
+
+    await interaction.showModal(modal);
+  }
+
+  private async handleVoiceRefreshButton(interaction: any) {
+    const member = interaction.member as GuildMember;
+    const channel = member.voice.channel;
+
+    if (!channel) {
+      return await interaction.reply({ 
+        content: '❌ You must be in a voice channel to refresh the panel.', 
+        ephemeral: true 
+      });
+    }
+
+    // Refresh the control panel with updated info
+    const embed = new EmbedBuilder()
+      .setTitle('🎙️ VoiceMaster Control Panel')
+      .setDescription(`Managing voice channel: **${channel.name}**\n👥 **${channel.members.size}** members connected\n🔄 *Panel refreshed*`)
+      .setColor(0x5865F2)
+      .addFields([
+        { name: '🔒 Lock/Unlock', value: 'Control who can join', inline: true },
+        { name: '👥 User Limit', value: 'Set max members', inline: true },
+        { name: '📝 Rename', value: 'Change channel name', inline: true },
+        { name: '🎵 Status', value: 'Set voice activity status', inline: true },
+        { name: '👢 Kick Users', value: 'Remove members', inline: true },
+        { name: '👑 Transfer', value: 'Give ownership', inline: true }
+      ]);
+
+    const row1 = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('voice_lock')
+          .setLabel('🔒 Lock')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('voice_unlock')
+          .setLabel('🔓 Unlock')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('voice_limit')
+          .setLabel('👥 Limit')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('voice_rename')
+          .setLabel('📝 Rename')
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+    const row2 = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('voice_status')
+          .setLabel('🎵 Status')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('voice_kick')
+          .setLabel('👢 Kick')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('voice_transfer')
+          .setLabel('👑 Transfer')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId('voice_refresh')
+          .setLabel('🔄 Refresh')
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+    await interaction.update({ 
+      embeds: [embed], 
+      components: [row1, row2]
+    });
   }
 }
 
